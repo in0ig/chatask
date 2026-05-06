@@ -1,0 +1,84 @@
+# ChatBI 完整部署（前端 + 后端 + MySQL）
+# 前端默认映射：http://localhost:5000
+# 使用方法：
+#   cp .env.docker .env.docker.local  # 填入真实配置（可选，见下方 env_file）
+#   docker compose up -d --build    # 构建 + 后台启动全部服务
+#   已有镜像、不重建：docker compose up -d --no-build
+#   仅构建镜像：docker compose build
+#   查看状态：docker compose ps
+
+services:
+
+  # ==================== MySQL 数据库 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: chatbi-mysql
+    # lower_case_table_names=1：跨平台统一大小写不敏感，避免 Linux/Windows 行为差异
+    # sort_buffer_size：增大排序缓冲区，避免 dialogue_sessions ORDER BY 时 OOM 报错
+    command: --lower_case_table_names=1 --sort_buffer_size=4M
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-12345678}
+      MYSQL_DATABASE: ${DB_NAME:-chatbi}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/chatbi_docker_init.sql:/docker-entrypoint-initdb.d/01-chatbi.sql
+      - ./database/mock_data_docker_init.sql:/docker-entrypoint-initdb.d/02-mock_data.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-12345678}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - chatbi-net
+
+  # ==================== 后端 API ====================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chatbi-backend
+    env_file:
+      - path: .env.docker
+      - path: .env.docker.local
+        required: false   # 无此文件时仍可用 .env.docker 启动（clone 后未复制也可 up）
+    environment:
+      # 覆盖 DB_HOST 为容器服务名
+      DB_HOST: mysql
+      # 业务数据源（mock_data 等）若仍为 127.0.0.1/localhost，SQL 执行与「测试连接」会连到容器自身而失败；映射到 compose 中的 mysql
+      CHATBI_DATASOURCE_LOCALHOST_REMAP: mysql
+    ports:
+      - "5002:8000"
+    volumes:
+      - ./backend/logs:/var/log/chatbi
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chatbi-net
+
+  # ==================== 前端 ====================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chatbi-frontend
+    # 默认使用 5000；如需改端口可写 ${FRONTEND_PORT:-5000}:80 并在同目录 .env 中设置 FRONTEND_PORT
+    ports:
+      - "${FRONTEND_PORT:-5000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - chatbi-net
+
+volumes:
+  mysql_data:
+
+networks:
+  chatbi-net:
+    driver: bridge

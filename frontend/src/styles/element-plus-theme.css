@@ -1,0 +1,151 @@
+/* 自定义 Element Plus 主题色 */
+:root {
+  --el-color-primary: #1890ff;
+  --el-color-primary-light-3: #3ca5ff;
+  --el-color-primary-light-5: #72baff;
+  --el-color-primary-light-7: #a8d0ff;
+  --el-color-primary-light-8: #c0ddff;
+  --el-color-primary-light-9: #d9ebff;
+  --el-color-primary-dark-2: #157fd5;
+  --el-color-primary-dark-1: #1a94ff;
+  --el-color-primary-dark-3: #1477c9;
+}
+
+/* 确保所有使用 Element Plus 的组件都使用新的主题色 */
+.el-button--primary {
+  background-color: #1890ff;
+  border-color: #1890ff;
+}
+
+.el-button--primary:hover {
+  background-color: #0978e0;
+  border-color: #0978e0;
+}
+
+.el-button--primary:active {
+  background-color: #0766c2;
+  border-color: #0766c2;
+}
+
+/* 更新其他相关组件的样式 */
+.el-input__inner:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.el-tabs__item.is-active {
+  color: #1890ff;
+}
+
+.el-pagination {
+  color: #1890ff;
+}
+
+.el-pagination button:hover {
+  color: #1890ff;
+}
+
+.el-pagination.is-background .btn-next,
+.el-pagination.is-background .btn-prev {
+  color: #1890ff;
+}
+
+.el-pagination.is-background .btn-next:hover,
+.el-pagination.is-background .btn-prev:hover {
+  color: #1890ff;
+}
+
+.el-pagination.is-background .btn-next:active,
+.el-pagination.is-background .btn-prev:active {
+  color: #1890ff;
+}
+
+/* 更新加载动画的颜色 */
+.el-loading-spinner {
+  border-top-color: #1890ff;
+}
+
+/* 更新表单验证错误颜色 */
+.el-form-item.is-error .el-form-item__error {
+  color: #ff4d4f;
+}
+
+/* 更新成功提示颜色 */
+.el-message--success {
+  background-color: #f0f7ff;
+  border-left-color: #1890ff;
+}
+
+/* 更新警告提示颜色 */
+.el-message--warning {
+  background-color: #fffbe6;
+  border-left-color: #faad14;
+}
+
+/* 更新错误提示颜色 */
+.el-message--error {
+  background-color: #fff2f0;
+  border-left-color: #ff4d4f;
+}
+
+/* 更新对话框按钮颜色 */
+.el-dialog__footer .el-button--primary {
+  background-color: #1890ff;
+  border-color: #1890ff;
+}
+
+.el-dialog__footer .el-button--primary:hover {
+  background-color: #0978e0;
+  border-color: #0978e0;
+}
+
+/* 更新导航菜单选中状态 */
+.el-menu-item.is-active,
+.el-sub-menu.is-active {
+  color: #1890ff;
+  background-color: #f0f7ff;
+}
+
+/* 更新标签颜色 */
+.el-tag--primary {
+  background-color: #f0f7ff;
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+/* 更新进度条颜色 */
+.el-progress-bar {
+  background-color: #1890ff;
+}
+
+/* 更新选择器选中状态 */
+.el-select-dropdown__item.selected {
+  background-color: #f0f7ff;
+  color: #1890ff;
+}
+
+/* 更新下拉菜单选中状态 */
+.el-dropdown-menu__item:hover {
+  background-color: #f0f7ff;
+}
+
+/* 更新分页器激活状态 */
+.el-pagination.is-background .btn-next:hover,
+.el-pagination.is-background .btn-prev:hover {
+  color: #1890ff;
+}
+
+/* 更新表格选中行 */
+.el-table .el-table__body tr.el-table__row--selected td {
+  background-color: #f0f7ff;
+}
+
+/* 更新弹出框的边框颜色 */
+.el-popover {
+  border-color: #1890ff;
+}
+
+/* 更新通知的边框颜色 */
+.el-notification {
+  border-left-color: #1890ff;
+}

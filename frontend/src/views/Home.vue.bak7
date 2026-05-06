@@ -1,0 +1,1058 @@
+<template>
+  <div class="home-container">
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="toolbar-item">
+          <el-switch
+            v-model="dataInterpretation"
+            active-text="数据解读"
+            inactive-text=""
+            :active-color="'#1890ff'"
+            :inactive-color="'#ccc'"
+            size="small"
+          />
+        </div>
+        
+        <div class="toolbar-item">
+          <el-switch
+            v-model="fluctuationAnalysis"
+            active-text="波动归因"
+            inactive-text=""
+            :active-color="'#1890ff'"
+            :inactive-color="'#ccc'"
+            size="small"
+          />
+        </div>
+      </div>
+      
+      <!-- 右侧配置按钮 -->
+      <div class="toolbar-right">
+        <el-button 
+          class="config-button" 
+          @click="toggleConfigDrawer"
+        >
+          <el-icon style="margin-right: 4px;"><Setting /></el-icon>
+          配置
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 欢迎语和推荐问题 -->
+    <div class="welcome-section" v-if="!hasActiveSession">
+      <div class="welcome-header">
+        <h1>欢迎使用 ChatBI</h1>
+        <p>让每个人都能像对话一样分析数据</p>
+      </div>
+      
+      <div class="recommended-questions">
+        <h3>推荐问题</h3>
+        <div class="question-list">
+          <button 
+            v-for="(question, index) in recommendedQuestions" 
+            :key="index" 
+            class="question-btn"
+            @click="selectRecommendedQuestion(question)"
+          >
+            {{ question }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 消息流区域 -->
+    <div class="messages-container" v-else>
+      <div class="messages-list">
+        <!-- 数据源加载中状态 -->
+        <div v-if="isLoading && !error" class="message ai-message">
+          <div class="avatar ai-avatar">🤖</div>
+          <div class="message-content ai-content">
+            <div class="loading-indicator">
+              <div class="loading-dots">
+                <span>.</span>
+                <span>.</span>
+                <span>.</span>
+              </div>
+              <p>正在加载数据源...</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 数据源加载错误状态 -->
+        <div v-else-if="error" class="message ai-message">
+          <div class="avatar ai-avatar">🤖</div>
+          <div class="message-content ai-content">
+            <p class="error-message">{{ error }}</p>
+          </div>
+        </div>
+        
+        <!-- 正常消息列表 -->
+        <div 
+          v-for="message in messages" 
+          :key="message.id"
+          v-show="!isLoading || error"
+        >
+          <!-- 用户消息 -->
+          <div v-if="message.role === 'user'" class="message user-message">
+            <div class="avatar user-avatar">👤</div>
+            <div class="message-content user-content">
+              <p>{{ message.content }}</p>
+              <div class="message-actions">
+                <button class="action-btn" @click="refreshMessage(message)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                </button>
+                <button class="action-btn" @click="likeMessage(message)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                </button>
+                <button class="action-btn" @click="dislikeMessage(message)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- AI 消息 -->
+          <div v-else class="message ai-message">
+            <div class="avatar ai-avatar">🤖</div>
+            <div class="message-content ai-content">
+              <p v-if="message.content" v-html="formatContent(message.content)"></p>
+              
+              <!-- 图表显示 -->
+              <div v-if="message.chartType" class="chart-container">
+                <ChartRenderer 
+                  :chart-title="message.chartTitle || ''" 
+                  :data="message.chartData" 
+                  :max-value="message.maxValue"
+                />
+              </div>
+              
+              <!-- 数据表格显示 -->
+              <div v-if="message.tableData" class="table-container">
+                <DataTable 
+                  :headers="message.tableHeaders || []" 
+                  :rows="message.tableData"
+                />
+              </div>
+              
+              <!-- 操作按钮 -->
+              <div class="message-actions">
+                <button class="action-btn" @click="refreshMessage(message)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                </button>
+                <button class="action-btn" @click="likeMessage(message)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                </button>
+                <button class="action-btn" @click="dislikeMessage(message)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 加载状态 -->
+        <div v-if="uiStore.isLoading" class="message ai-message">
+          <div class="avatar ai-avatar">🤖</div>
+          <div class="message-content ai-content">
+            <div class="loading-indicator">
+              <div class="loading-dots">
+                <span>.</span>
+                <span>.</span>
+                <span>.</span>
+              </div>
+              <p>{{ uiStore.loadingMessage }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部输入控制区 -->
+    <div class="input-container">
+        <!-- 隐藏的文件上传输入 -->
+        <input 
+          type="file" 
+          id="file-upload" 
+          style="display: none;" 
+          @change="handleFileUpload" 
+          accept=".csv,.xlsx,.xls,.txt,.json" 
+        />
+        
+        <!-- 第一行：数据源选择器、预览按钮、模式切换开关 -->
+        <div class="input-row" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <div class="data-source-selector" style="display: flex; align-items: center;">
+            <label class="label">数据源：</label>
+            <el-select 
+              v-model="currentDataSource" 
+              placeholder="请选择数据源" 
+              class="source-select"
+              multiple
+              collapse-tags
+              @change="handleDataSourceChange"
+            >
+              <el-option 
+                v-for="item in dataSources" 
+                :key="item.id" 
+                :label="item.name" 
+                :value="item.id" 
+              />
+            </el-select>
+          </div>
+          
+          <el-button 
+            type="primary" 
+            size="small" 
+            class="preview-btn"
+            @click="openDataSourceSelector"
+          >
+            预览
+          </el-button>
+          
+          <div class="mode-toggle" style="display: flex; align-items: center; margin-left: auto;">
+            <label class="label" style="margin-right: 8px;">智能问数</label>
+            <el-switch
+              v-model="chatMode"
+              active-text=""
+              inactive-text=""
+              :active-color="'#1890ff'"
+              :inactive-color="'#ccc'"
+              size="small"
+              @change="toggleChatMode"
+            />
+            <label class="label" style="margin-left: 8px;">生成报告</label>
+          </div>
+        </div>
+        
+        <!-- 第二行：数据表选择器、预览按钮 -->
+        <div class="input-row" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <div class="data-table-selector" style="display: flex; align-items: center; flex: 1;">
+            <label class="label">数据表：</label>
+            <el-select 
+              v-model="currentDataTables" 
+              placeholder="请选择数据表" 
+              class="table-select"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              :disabled="!currentDataSource"
+              @change="handleDataTableChange"
+            >
+              <el-option 
+                v-for="item in availableDataTables" 
+                :key="item.id" 
+                :label="item.name" 
+                :value="item.id" 
+              />
+            </el-select>
+          </div>
+          
+          <el-button 
+            type="primary" 
+            size="small" 
+            class="preview-btn"
+            :disabled="!currentDataTables || currentDataTables.length === 0"
+            @click="openDataTablePreview"
+          >
+            预览
+          </el-button>
+        </div>
+        
+        <!-- 单行：占满宽度的文本输入框 -->
+        <div class="input-row">
+          <el-input
+            v-model="inputText"
+            :placeholder="'输入您的问题，让 AI 分析数据...'"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 6 }"
+            class="message-input"
+            @keydown.enter.exact.prevent="sendMessage"
+            @keydown.enter.shift="handleShiftEnter"
+          />
+        </div>      
+      <!-- 单行：附件按钮和发送按钮右对齐 -->
+      <div class="input-row" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px;">
+        <!-- 附件按钮 - 使用 SVG 图标 -->
+        <button 
+          type="button" 
+          class="custom-btn attachment-btn" 
+          @click="uploadFile"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+        
+        <!-- 发送按钮 - 使用 SVG 图标 -->
+        <button 
+          type="button" 
+          class="custom-btn send-btn" 
+          :disabled="!canSend"
+          @click="sendMessage"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <!-- 数据源选择弹窗 -->
+    <DataSourceSelector
+      v-model="dataSourceSelectorVisible"
+      :data-sources="dataSources"
+      :is-loading="isLoading"
+      :error="error"
+      @confirm="handleDataSourceConfirm"
+      @preview="handleDataSourcePreview"
+      @retry="handleDataSourceRetry"
+    />
+    
+    <!-- 数据预览模态框 -->
+    <DataPreviewModal
+      v-model="dataPreviewModalVisible"
+      :preview-data="previewData"
+      :is-multi-table="isMultiTable"
+      :selected-tables="selectedTablesForPreview"
+      @table-change="handlePreviewTableChange"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, reactive } from 'vue'
+import { useChatStore } from '@/store/modules/chat'
+import { useUIStore } from '@/store/modules/ui'
+import { useRoute } from 'vue-router'
+import { Setting } from '@element-plus/icons-vue'
+import ChartRenderer from '@/components/ChartRenderer.vue'
+import DataTable from '@/components/DataTable.vue'
+import DataSourceSelector from '@/components/DataSource/DataSourceSelector.vue'
+import DataPreviewModal from '@/components/DataSource/DataPreviewModal.vue'
+import { useDataPrepStore } from '@/store/modules/dataPrep'
+
+const chatStore = useChatStore()
+const uiStore = useUIStore()
+const route = useRoute()
+
+// 配置抽屉控制
+const toggleConfigDrawer = () => {
+  uiStore.toggleConfigDrawer()
+}
+
+// 状态
+const inputText = ref('')
+const currentDataSource = ref('')
+const currentDataTables = ref<string[]>([])
+const chatMode = ref('query')
+const dataInterpretation = ref(true)
+const fluctuationAnalysis = ref(false)
+
+// 数据源选择弹窗状态
+const dataSourceSelectorVisible = ref(false)
+const dataPreviewModalVisible = ref(false)
+const previewData = ref({
+  schema: [],
+  data: []
+})
+const isMultiTable = ref(false)
+
+const selectedTablesForPreview = ref([])// 获取数据源列表
+const dataPrepStore = useDataPrepStore()
+const dataSources = computed(() => {
+  return dataPrepStore.dataSources
+})
+
+// 加载状态和错误处理
+const isLoading = computed(() => {
+  return dataPrepStore.isLoadingDataSources || uiStore.isLoading
+})
+
+const error = computed(() => {
+  return dataPrepStore.dataSourceError
+})
+
+// 推荐问题
+const recommendedQuestions = ref([
+  '2023年各商品类别的销售额是多少？',
+  '2024年毛利最高的产品是什么？',
+  '最近7天的销售趋势如何？',
+  '各区域的销售对比情况',
+  '客户转化率的变化趋势'
+])
+
+// 消息列表
+const messages = computed(() => {
+  return chatStore.messages
+})
+
+// 是否有活跃会话（有消息时显示消息流，否则显示欢迎页）
+const hasActiveSession = computed(() => {
+  return messages.value && messages.value.length > 0
+})
+
+// 输入框占位符
+const inputPlaceholder = computed(() => {
+  if (!currentDataSource.value) {
+    return '请先选择数据源...'
+  }
+  return chatMode.value === 'query' 
+    ? '输入您的问题，让 AI 分析数据...' 
+    : '输入您想要生成的报告内容...'
+})
+
+// 是否可以发送消息
+const canSend = computed(() => {
+  return inputText.value.trim().length > 0 && currentDataSource.value
+})
+
+// 格式化内容（处理换行和链接）
+const formatContent = (content) => {
+  if (!content) return ''
+  return content.replace(/\n/g, '<br>')
+}
+
+// 处理回车键
+const handleShiftEnter = (event) => {
+  // 允许 Shift+Enter 插入换行
+  event.preventDefault()
+  const textarea = event.target
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const text = textarea.value
+  textarea.value = text.substring(0, start) + '\n' + text.substring(end)
+  textarea.selectionStart = textarea.selectionEnd = start + 1
+}
+
+// 选择推荐问题
+const selectRecommendedQuestion = (question) => {
+  inputText.value = question
+}
+
+// 数据源变更
+const handleDataSourceChange = (value) => {
+  currentDataSource.value = value
+  // 清空数据表选择
+  currentDataTables.value = []
+  chatStore.setDataSource(value)
+}
+
+// 数据表变更
+const handleDataTableChange = (values) => {
+  currentDataTables.value = values
+  chatStore.setDataTables(values)
+}
+
+// 打开数据表预览
+const openDataTablePreview = () => {
+  // 获取选中的数据表信息
+  const selectedTables = availableDataTables.value.filter(table =>
+    currentDataTables.value.includes(table.id)
+  )
+  
+  if (selectedTables.length === 0) {
+    ElMessage.warning('请先选择数据表')
+    return
+  }
+  
+  // 设置选中的表列表供预览模态框使用
+  selectedTablesForPreview.value = selectedTables
+  
+  // 如果只选择了一张表，直接预览
+  if (selectedTables.length === 1) {
+    isMultiTable.value = false
+    handleDataSourcePreview(selectedTables[0])
+  } else {
+    // 多张表，显示选择对话框
+    isMultiTable.value = true
+    // 默认预览第一张表
+    handleDataSourcePreview(selectedTables[0])
+  }
+  
+  // 打开预览模态框
+  dataPreviewModalVisible.value = true
+}
+
+// 处理预览表切换
+const handlePreviewTableChange = (tableId) => {
+  // 根据表ID找到对应的表对象
+  const table = selectedTablesForPreview.value.find(t => t.id === tableId)
+  if (table) {
+    handleDataSourcePreview(table)
+  }
+}
+
+// 打开数据源选择弹窗
+const openDataSourceSelector = () => {
+  // 重置数据源选择状态
+  dataSources.value.forEach(table => {
+    table.selected = currentDataSource.value.includes(table.id)
+  })
+  dataSourceSelectorVisible.value = true
+}
+
+// 处理数据源选择确认
+const handleDataSourceConfirm = (selectedTables) => {
+  // 更新当前选择的数据源
+  currentDataSource.value = selectedTables.map(table => table.id)
+  chatStore.setDataSource(currentDataSource.value)
+  dataSourceSelectorVisible.value = false
+}
+
+// 处理数据源预览
+const handleDataSourcePreview = (table) => {
+  // 为简化，这里只预览单个表
+  // 实际应用中，这里应该调用后端 API 获取表结构和数据
+  previewData.value = {
+    schema: [
+      { name: 'id', type: 'int', description: '主键ID', unit: '', category: '标识', isPrimaryKey: true },
+      { name: 'name', type: 'varchar', description: '姓名', unit: '', category: '标识', isPrimaryKey: false },
+      { name: 'age', type: 'int', description: '年龄', unit: '岁', category: '人口', isPrimaryKey: false },
+      { name: 'email', type: 'varchar', description: '邮箱地址', unit: '', category: '联系方式', isPrimaryKey: false },
+      { name: 'created_at', type: 'datetime', description: '创建时间', unit: '', category: '时间', isPrimaryKey: false }
+    ],
+    data: [
+      { id: 1, name: '张三', age: 25, email: 'zhangsan@example.com', created_at: '2023-01-15 10:30:00' },
+      { id: 2, name: '李四', age: 30, email: 'lisi@example.com', created_at: '2023-02-20 14:45:00' },
+      { id: 3, name: '王五', age: 28, email: 'wangwu@example.com', created_at: '2023-03-10 09:15:00' }
+    ]
+  }
+  dataPreviewModalVisible.value = true
+}
+
+// 处理数据源重试
+const handleDataSourceRetry = () => {
+  dataPrepStore.resetDataSourceState()
+  dataPrepStore.loadDataSources()
+}
+
+// 上传图片
+const uploadImage = () => {
+  console.log('上传图片')
+}
+
+// 上传文件
+const uploadFile = () => {
+  const fileInput = document.getElementById('file-upload')
+  if (fileInput) {
+    fileInput.click()
+  }
+}
+
+// 处理文件上传
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    // 验证文件类型
+    const allowedTypes = ['.csv', '.xlsx', '.xls', '.txt', '.json']
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.'))
+    
+    if (!allowedTypes.includes(fileExtension.toLowerCase())) {
+      console.warn('不支持的文件类型:', file.name)
+      alert('仅支持 .csv, .xlsx, .xls, .txt, .json 文件格式')
+      event.target.value = '' // 清空文件输入
+      return
+    }
+    
+    // 在控制台显示文件信息
+    console.log('上传文件信息:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified
+    })
+    
+    // 这里可以调用后端 API 上传文件
+    // uploadFileToServer(file)
+    
+    // 清空文件输入
+    event.target.value = ''
+  }
+}
+
+// 切换聊天模式
+const toggleChatMode = () => {
+  chatStore.toggleChatMode()
+}
+
+// 发送消息
+const sendMessage = async () => {
+  if (!canSend.value) return
+  
+  await chatStore.sendMessage(inputText.value)
+  inputText.value = ''
+}
+
+// 刷新消息
+const refreshMessage = (message) => {
+  // 实现刷新逻辑
+  console.log('刷新消息:', message)
+}
+
+// 点赞消息
+const likeMessage = (message) => {
+  // 实现点赞逻辑
+  console.log('点赞消息:', message)
+}
+
+// 点踩消息
+const dislikeMessage = (message) => {
+  // 实现点踩逻辑
+  console.log('点踩消息:', message)
+}
+
+// 初始化
+onMounted(() => {
+  // 加载会话和历史记录
+  chatStore.loadSessions()
+  chatStore.loadHistory()
+  
+  // 加载数据源
+  dataPrepStore.loadDataSources()
+  
+  // 设置默认数据源（如果存在）
+  if (dataPrepStore.dataSources.length > 0) {
+    const activeSource = dataPrepStore.dataSources.find(ds => ds.isActive)
+    if (activeSource) {
+      currentDataSource.value = [activeSource.id]
+      chatStore.setDataSource([activeSource.id])
+    } else {
+      currentDataSource.value = [dataPrepStore.dataSources[0].id]
+      chatStore.setDataSource([dataPrepStore.dataSources[0].id])
+    }
+  }
+})
+</script>
+
+<style scoped>
+.home-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 20px;
+}
+
+/* 顶部工具栏样式 */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 0 20px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-button {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border: 1px solid #d9d9d9;
+  background-color: #ffffff;
+  color: #666;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.config-button:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.config-button .el-icon {
+  font-size: 16px;
+}
+
+/* 欢迎页面样式 */
+.welcome-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.welcome-header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1890ff;
+  margin-bottom: 10px;
+}
+
+.welcome-header p {
+  font-size: 18px;
+  color: #444;
+  margin-bottom: 40px;
+}
+
+.recommended-questions {
+  width: 100%;
+  max-width: 600px;
+}
+
+.recommended-questions h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.question-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.question-btn {
+  background-color: #f0f7ff;
+  color: #1890ff;
+  border: 1px solid #d0e7ff;
+  padding: 10px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.question-btn:hover {
+  background-color: #1890ff;
+  color: white;
+  border-color: #1890ff;
+}
+
+/* 消息流区域样式 */
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 0;
+}
+
+.messages-list {
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.message {
+  display: flex;
+  margin-bottom: 24px;
+}
+
+.user-message {
+  flex-direction: row-reverse;
+}
+
+.ai-message {
+  flex-direction: row;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-left: 16px;
+}
+
+.user-avatar {
+  background-color: #1890ff;
+  color: white;
+}
+
+.ai-avatar {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.message-content {
+  flex: 1;
+  max-width: calc(100% - 56px);
+}
+
+.user-content {
+  background-color: #f0f0f0;
+  color: #333;
+  padding: 16px;
+  border-radius: 16px 16px 16px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.ai-content {
+  background-color: white;
+  color: #333;
+  padding: 16px;
+  border-radius: 16px 16px 0 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.message-content p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.message-content p:not(:last-child) {
+  margin-bottom: 12px;
+}
+
+/* 图表容器 */
+.chart-container {
+  margin: 16px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* 数据表格容器 */
+.table-container {
+  margin: 16px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* 消息操作按钮 */
+.message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.action-btn {
+  background-color: #f0f0f0;
+  color: #333;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background-color: #e0e0e0;
+}
+
+/* 加载指示器 */
+.loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.loading-dots span {
+  width: 6px;
+  height: 6px;
+  background-color: #1890ff;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* 底部输入控制区样式 */
+.input-container {
+  padding: 20px 0;
+  border-top: 1px solid #eee;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  margin-bottom: 12px;
+}
+
+.data-source-selector {
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+}
+
+.label {
+  font-size: 14px;
+  color: #666;
+  margin-right: 8px;
+}
+
+.source-select {
+  width: 180px;
+}
+
+.preview-btn {
+  margin-right: 16px;
+}
+
+.mode-toggle {
+  margin-left: auto;
+}
+
+.message-input {
+  flex: 1;
+  border-radius: 20px;
+  border: 1px solid #ddd;
+  padding: 12px 16px;
+  font-size: 16px;
+  resize: none;
+}
+
+.message-input:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+/* Custom SVG buttons styles */
+.custom-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: #1890ff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  color: white;
+}
+
+.custom-btn svg {
+  color: white;
+}
+
+.attachment-btn:hover {
+  background-color: #096dd9;
+  transform: scale(1.05);
+}
+
+.send-btn:hover {
+  background-color: #096dd9;
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  background-color: #f0f0f0;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .home-container {
+    padding: 10px;
+  }
+  
+  .toolbar {
+    padding: 0 10px;
+    gap: 16px;
+  }
+  
+  .welcome-section {
+    padding: 20px;
+  }
+  
+  .welcome-header h1 {
+    font-size: 28px;
+  }
+  
+  .welcome-header p {
+    font-size: 16px;
+  }
+  
+  .question-list {
+    gap: 8px;
+  }
+  
+  .question-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .input-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0 10px;
+  }
+  
+  .data-source-selector {
+    margin-right: 0;
+    margin-bottom: 8px;
+    width: 100%;
+  }
+  
+  .source-select {
+    width: 100%;
+  }
+  
+  .preview-btn {
+    margin-right: 0;
+    margin-bottom: 8px;
+    width: 100%;
+  }
+  
+  .mode-toggle {
+    margin-left: 0;
+    margin-bottom: 8px;
+    width: 100%;
+  }
+  
+  .message-input {
+    padding: 10px 14px;
+    font-size: 14px;
+    width: 100%;
+  }
+  
+  .photo-btn, .attachment-btn, .send-btn {
+    margin-left: 0;
+    margin-top: 8px;
+  }
+}
+</style>

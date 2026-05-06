@@ -1,0 +1,395 @@
+{
+  "sql_generation": [
+    {
+      "sample_id": "sql_gen_001",
+      "prompt_type": "sql_generation",
+      "input_text": "查询所有用户的姓名和邮箱地址",
+      "output_text": "{\"sql\": \"SELECT name, email FROM users;\", \"explanation\": \"查询users表中的name和email字段\", \"estimatedRows\": \"未知\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218805",
+      "created_by": "system",
+      "description": "基础查询示例",
+      "tags": [
+        "basic",
+        "select",
+        "users"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_gen_002",
+      "prompt_type": "sql_generation",
+      "input_text": "统计每个部门的员工数量，按数量降序排列",
+      "output_text": "{\"sql\": \"SELECT department, COUNT(*) as employee_count FROM employees GROUP BY department ORDER BY employee_count DESC;\", \"explanation\": \"按部门分组统计员工数量并降序排列\", \"estimatedRows\": \"部门数量\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218813",
+      "created_by": "system",
+      "description": "分组统计示例",
+      "tags": [
+        "group_by",
+        "count",
+        "order_by"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_gen_003",
+      "prompt_type": "sql_generation",
+      "input_text": "查询销售额超过10000的订单信息，包含订单号、客户名称和销售额",
+      "output_text": "{\"sql\": \"SELECT o.order_id, c.customer_name, o.total_amount FROM orders o JOIN customers c ON o.customer_id = c.customer_id WHERE o.total_amount > 10000;\", \"explanation\": \"关联查询订单和客户表，筛选销售额大于10000的记录\", \"estimatedRows\": \"符合条件的订单数量\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218815",
+      "created_by": "system",
+      "description": "关联查询和条件筛选示例",
+      "tags": [
+        "join",
+        "where",
+        "orders",
+        "customers"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_gen_004",
+      "prompt_type": "sql_generation",
+      "input_text": "计算每个月的销售总额，显示月份和对应的销售额",
+      "output_text": "{\"sql\": \"SELECT DATE_FORMAT(order_date, '%Y-%m') as month, SUM(total_amount) as monthly_sales FROM orders GROUP BY DATE_FORMAT(order_date, '%Y-%m') ORDER BY month;\", \"explanation\": \"按月份分组统计销售总额，使用DATE_FORMAT函数格式化日期\", \"estimatedRows\": \"月份数量\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218817",
+      "created_by": "system",
+      "description": "日期函数和时间聚合示例",
+      "tags": [
+        "date_format",
+        "sum",
+        "group_by",
+        "time_series"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_gen_005",
+      "prompt_type": "sql_generation",
+      "input_text": "查找最近30天内注册的新用户数量",
+      "output_text": "{\"sql\": \"SELECT COUNT(*) as new_users FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY);\", \"explanation\": \"使用DATE_SUB函数计算30天前的日期，统计新注册用户数量\", \"estimatedRows\": \"1\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218819",
+      "created_by": "system",
+      "description": "日期计算和时间范围查询示例",
+      "tags": [
+        "date_sub",
+        "count",
+        "time_range",
+        "users"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_gen_006",
+      "prompt_type": "sql_generation",
+      "input_text": "查询每个产品类别的平均价格和产品数量",
+      "output_text": "{\"sql\": \"SELECT category, AVG(price) as avg_price, COUNT(*) as product_count FROM products GROUP BY category ORDER BY avg_price DESC;\", \"explanation\": \"按产品类别分组，计算平均价格和产品数量，按平均价格降序排列\", \"estimatedRows\": \"产品类别数量\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218821",
+      "created_by": "system",
+      "description": "聚合函数和分组统计示例",
+      "tags": [
+        "avg",
+        "count",
+        "group_by",
+        "products"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_generation_1770259320",
+      "prompt_type": "sql_generation",
+      "input_text": "查询产品信息包含名称价格和库存数量",
+      "output_text": "{\"sql\": \"SELECT name, price, stock_quantity FROM products;\", \"explanation\": \"查询产品表的基本信息\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:42:00.674633",
+      "created_by": "admin",
+      "description": "产品查询示例",
+      "tags": [],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "sql_generation_1770259519",
+      "prompt_type": "sql_generation",
+      "input_text": "查询所有员工的基本信息包括姓名部门和工资",
+      "output_text": "{\"sql\": \"SELECT name, department, salary FROM employees;\", \"explanation\": \"查询员工表的基本信息\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:45:19.129581",
+      "created_by": "admin",
+      "description": "员工查询示例",
+      "tags": [],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    }
+  ],
+  "intent_recognition": [
+    {
+      "sample_id": "intent_001",
+      "prompt_type": "intent_recognition",
+      "input_text": "显示销售额最高的产品",
+      "output_text": "{\"intent\": \"query\", \"confidence\": 0.9, \"reasoning\": \"用户想要查询具体的销售数据，属于智能问数类型\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218816",
+      "created_by": "system",
+      "description": "查询意图示例",
+      "tags": [
+        "query",
+        "sales",
+        "product"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "intent_002",
+      "prompt_type": "intent_recognition",
+      "input_text": "生成本月的销售报告包含详细数据",
+      "output_text": "{\"intent\": \"report\", \"confidence\": 0.95, \"reasoning\": \"用户要求生成综合性报告，属于生成报告类型\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218818",
+      "created_by": "system",
+      "description": "报告意图示例",
+      "tags": [
+        "report",
+        "monthly",
+        "sales"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "intent_003",
+      "prompt_type": "intent_recognition",
+      "input_text": "统计用户数量包含活跃用户和新注册用户",
+      "output_text": "{\"intent\": \"query\", \"confidence\": 0.85, \"reasoning\": \"用户想要获取具体的统计数据，属于智能问数类型\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218820",
+      "created_by": "system",
+      "description": "统计查询意图示例",
+      "tags": [
+        "query",
+        "count",
+        "users"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "intent_004",
+      "prompt_type": "intent_recognition",
+      "input_text": "制作年度业绩分析报告",
+      "output_text": "{\"intent\": \"report\", \"confidence\": 0.92, \"reasoning\": \"用户要求制作综合性的分析报告，属于生成报告类型\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218822",
+      "created_by": "system",
+      "description": "年度报告意图示例",
+      "tags": [
+        "report",
+        "annual",
+        "analysis"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    }
+  ],
+  "table_selection": [
+    {
+      "sample_id": "table_sel_001",
+      "prompt_type": "table_selection",
+      "input_text": "查询用户信息包含姓名邮箱和注册时间",
+      "output_text": "{\"selectedTables\": [{\"tableId\": \"users\", \"tableName\": \"users\", \"relevanceScore\": 0.95, \"reasoning\": \"用户信息直接对应users表\", \"relevantFields\": [\"name\", \"email\", \"phone\"]}], \"overallReasoning\": \"用户查询明确指向用户相关数据\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218824",
+      "created_by": "system",
+      "description": "用户表选择示例",
+      "tags": [
+        "users",
+        "basic_selection"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    },
+    {
+      "sample_id": "table_sel_002",
+      "prompt_type": "table_selection",
+      "input_text": "分析销售数据和客户信息",
+      "output_text": "{\"selectedTables\": [{\"tableId\": \"orders\", \"tableName\": \"orders\", \"relevanceScore\": 0.9, \"reasoning\": \"销售数据主要存储在订单表中\", \"relevantFields\": [\"total_amount\", \"order_date\"]}, {\"tableId\": \"customers\", \"tableName\": \"customers\", \"relevanceScore\": 0.85, \"reasoning\": \"客户信息存储在客户表中\", \"relevantFields\": [\"customer_name\", \"customer_type\"]}], \"overallReasoning\": \"需要关联订单和客户表进行综合分析\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218826",
+      "created_by": "system",
+      "description": "多表关联选择示例",
+      "tags": [
+        "orders",
+        "customers",
+        "multi_table"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    }
+  ],
+  "intent_clarification": [
+    {
+      "sample_id": "clarify_001",
+      "prompt_type": "intent_clarification",
+      "input_text": "查询销售数据包含各种维度的分析",
+      "output_text": "{\"clarificationNeeded\": true, \"questions\": [{\"question\": \"您希望查询哪个时间范围的销售数据？\", \"options\": [\"今天\", \"本周\", \"本月\", \"本年\", \"自定义时间范围\"], \"type\": \"single_choice\"}, {\"question\": \"您需要查看哪些维度的销售数据？\", \"options\": [\"按产品分类\", \"按客户分类\", \"按地区分类\", \"按销售员分类\"], \"type\": \"multiple_choice\"}], \"summary\": \"我理解您想要查询销售数据，为了提供更准确的结果，请告诉我具体的时间范围和分析维度。\"}",
+      "sample_type": "positive",
+      "status": "validated",
+      "created_at": "2026-02-05T10:18:33.218828",
+      "created_by": "system",
+      "description": "销售数据查询澄清示例",
+      "tags": [
+        "sales",
+        "clarification",
+        "time_range"
+      ],
+      "metadata": {},
+      "validation_notes": "",
+      "metrics": {
+        "usage_count": 0,
+        "success_rate": 0.0,
+        "avg_similarity_score": 0.0,
+        "user_feedback_score": 0.0,
+        "last_used": null,
+        "validation_score": 1.0
+      }
+    }
+  ]
+}

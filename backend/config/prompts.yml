@@ -1,0 +1,1786 @@
+intent_recognition:
+  name: "意图识别"
+  version: "2.3"
+  description: "识别用户问题的意图类型（支持历史对话上下文）"
+  variables: ["user_question", "history_context", "current_date"]
+  content: |
+    请分析用户的问题，判断用户的意图类型：
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 即使置信度较低，也必须返回合法 JSON
+    - 禁止无依据假设：不得凭空补全月份/财周/日期/筛选值；证据不足时必须在 reasoning 中明确“不确定”
+
+    ## 当前日期时间
+    {{current_date}}
+    
+    **🔒 时间计算规则（必须严格遵守）**：
+    
+    当用户提到相对时间时，必须基于当前日期计算具体日期范围：
+    
+    1. **"上周" / "Last week"**：
+       - 定义：最近一个**完整**的财务周（周日至周六）
+       - 计算方法：找到当前日期之前最近的一个完整周
+       - 示例：当前 2026-02-13（五）→ 上周 = 2026-02-01（日）至 2026-02-07（六）
+       - ⚠️ 错误：2026-02-08（日）至 2026-02-14（六）← 包含本周日期
+    
+    2. **"本周"**：当前所在财务周（本周日到今天）
+    3. **"今天"**：当前日期
+    4. **"昨天"**：当前日期的前一天
+    5. **"本月"**：当前月份第一天到今天
+    
+    **重要**：不要假设或硬编码日期，必须基于当前日期动态计算
+
+    ## 历史对话上下文
+    {{history_context}}
+
+    ## 当前用户问题
+    {{user_question}}
+
+    **重要提示**：
+    - 如果历史对话中有上下文信息（如时间范围、筛选条件），当前问题可能是基于这些上下文的追问
+    - 例如：上一轮问"上周的销售数据"，这一轮问"各渠道的分布"，应理解为"上周各渠道的销售数据分布"
+
+    请从以下两种意图中选择一种：
+    1. 智能问数：用户想要查询具体的数据，获取数值、统计结果等
+    2. 生成报告：用户想要生成综合性的分析报告或总结
+
+    请以JSON格式返回结果：
+    {
+      "intent": "query" | "report",
+      "confidence": 0.0-1.0,
+      "reasoning": "判断理由（如果是基于历史上下文的追问，请说明）"
+    }
+
+table_selection:
+  name: "智能选表"
+  version: "5.2"
+  description: "根据用户问题选择相关数据表（支持历史对话上下文）"
+  variables: ["user_question", "intent_type", "semantic_context", "history_context", "current_date"]
+  content: |
+    # 智能选表任务
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 即使信息不足，也必须返回合法 JSON（可用空数组 + 原因）
+    - 禁止无依据假设：不得因为“看起来常见”就补齐时间范围、字段含义或数据分布
+    
+    ## 1. 当前日期时间
+    {{current_date}}
+    
+    **重要提示**：
+    - 当用户提到"今天"、"昨天"、"上周"、"本月"等相对时间时，必须基于当前日期计算具体日期范围
+    - 不要假设或硬编码任何日期，必须使用当前日期进行计算
+    - 不要假设数据的存在性或分布，所有判断必须基于实际查询结果
+    
+    ## 2. 历史对话上下文
+    {{history_context}}
+    
+    **重要提示**：
+    - 如果历史对话中提到了时间范围（如"上周"、"本月"），当前问题可能继承这个时间限定
+    - 如果历史对话中提到了筛选条件（如"niche渠道"、"付费用户"），当前问题可能基于这些条件
+    - 例如：历史对话问"上周各渠道的销售数据"，当前问"各品类的分布"，应理解为"上周各品类的销售数据分布"
+    
+    ## 3. 当前用户问题
+    {{user_question}}
+    
+    ## 4. 意图类型
+    {{intent_type}}
+    
+    ## 5. 语义增强上下文
+    
+    {{semantic_context}}
+    
+    ## 6. 🔒 强制规则（必须遵守）
+    
+    ### 6.1 理解历史上下文
+    
+    - ✅ **必须**：分析历史对话，理解用户的上下文限定条件
+    - ✅ **必须**：如果当前问题是追问，需要继承历史对话中的时间范围、筛选条件等
+    - 📝 **示例**：
+      - 历史：用户问"上周各渠道的销售数据"
+      - 当前：用户问"niche票型分布"
+      - 理解：应该查询"上周 niche 渠道的票型分布"
+    
+    ### 6.2 如果上下文中显示"用户已选择的数据表"
+    
+    - ✅ **必须**：只能在用户选择的表范围内进行选择
+    - ✅ **允许**：选择用户选择的全部表，或者其中的部分表
+    - ❌ **禁止**：选择用户未选择的表
+    - ❌ **禁止**：建议用户选择其他表
+    - 📋 **返回格式**：在 selectedTables 中只返回用户已选择的表（全部或部分）
+    - 📝 **说明要求**：在 overallReasoning 中说明为什么选择这些表，哪些字段与问题相关
+    
+    ### 6.3 如果上下文中显示"用户尚未选择数据表"
+    
+    - ❌ **禁止**：返回任何 selectedTables
+    - ✅ **必须**：在 overallReasoning 中明确提醒用户先选择数据表
+    - ✅ **允许**：建议用户应该选择哪些表（基于问题内容）
+    - 📋 **返回格式**：selectedTables 返回空数组 []
+    
+    ### 6.4 分析依据（按优先级排序）
+    
+    1. **历史对话上下文** - 理解用户的追问意图
+    2. **表结构和字段列表** - 了解表中有哪些字段
+    3. **字段描述** - 理解字段的业务含义
+    4. **数据字典关联** - 了解字段的枚举值和映射关系
+    5. **表关联关系** - 理解表之间的外键关系，便于多表查询
+    6. **全局知识库** - 数据源级别的语义信息
+    7. **表级别知识库** - 表级别的语义信息
+    
+    **优先使用**：有字段描述和数据字典关联的字段
+    
+    ## 7. 返回格式（JSON）
+    
+    ```json
+    {
+      "selectedTables": [
+        {
+          "tableName": "表名（必须是用户已选择的表的真实表名）",
+          "relevanceScore": 0.0-1.0,
+          "reasoning": "选择理由（说明为什么选择这个表，哪些字段与问题相关，是否基于历史上下文）",
+          "relevantFields": ["相关字段列表"]
+        }
+      ],
+      "overallReasoning": "整体选择逻辑（如果用户未选表，请提醒；如果用户已选表，说明为什么选择这些表；如果是追问，说明如何理解历史上下文）"
+    }
+    ```
+    
+    ## 8. 示例（包含历史上下文）
+    
+    ### 示例 1：基于历史上下文的追问
+    
+    **历史对话**：
+    ```
+    用户: 上周各渠道的Attendance分布
+    AI助手: 【智能选表】用户选择了 survey_attendance_mock 表...
+    ```
+    
+    **当前用户问题**："niche票型分布情况"
+    
+    **上下文**：用户已选择 survey_attendance_mock 表
+    
+    **正确返回**：
+    ```json
+    {
+      "selectedTables": [
+        {
+          "tableName": "survey_attendance_mock",
+          "relevanceScore": 1.0,
+          "reasoning": "基于历史对话，用户在上一轮询问了'上周各渠道的Attendance分布'，本轮追问'niche票型分布'。理解为查询上周 niche 渠道的票型分布。表中包含 Channel（渠道）、paidcompsp（票型）、ATTN（Attendance）等相关字段。",
+          "relevantFields": ["Channel", "paidcompsp", "ATTN", "Sample_Size", "FW_START_DATE", "FW_END_DATE", "FW_N"]
+        }
+      ],
+      "overallReasoning": "这是一个基于历史上下文的追问。上一轮用户询问了'上周各渠道的Attendance分布'，本轮追问'niche票型分布情况'，应理解为：在上周的时间范围内，查询 niche 渠道的票型分布。survey_attendance_mock 表包含所需的所有字段（Channel 用于筛选 niche，paidcompsp 用于分组统计票型，ATTN 用于统计数据）。"
+    }
+    ```
+    
+    ### 示例 2：用户已选择表
+    
+    **用户问题**："查询订单数据"
+    
+    **上下文**：用户已选择 orders 和 users 两个表
+    
+    **正确返回**：
+    ```json
+    {
+      "selectedTables": [
+        {
+          "tableName": "orders",
+          "relevanceScore": 1.0,
+          "reasoning": "订单表包含订单的所有核心信息（订单ID、用户ID、商品名称、金额、状态、创建时间），直接满足查询订单数据的需求",
+          "relevantFields": ["id", "user_id", "product_name", "amount", "status", "created_at"]
+        }
+      ],
+      "overallReasoning": "用户问题是'查询订单数据'，orders 表包含所有订单相关字段，可以直接满足需求。users 表虽然被选择，但当前问题不需要用户详细信息，因此不选择。"
+    }
+    ```
+    
+    ### 示例 3：用户未选择表
+    
+    **用户问题**："查询订单数据"
+    
+    **上下文**：用户尚未选择数据表
+    
+    **正确返回**：
+    ```json
+    {
+      "selectedTables": [],
+      "overallReasoning": "您还没有选择数据表，请先在数据准备页面选择需要分析的数据表。根据您的问题'查询订单数据'，建议选择 orders（订单表）。"
+    }
+    ```
+
+intent_clarification:
+  name: "意图澄清"
+  version: "4.1"
+  description: "展示 AI 对用户问题的理解（支持历史对话上下文）"
+  variables: ["user_question", "intent_type", "selected_tables", "semantic_context", "history_context", "current_date", "db_type"]
+  content: |
+    请分析用户问题并展示你的理解：
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 即使信息不足，也必须返回合法 JSON（可用空数组/空字符串兜底）
+    - 禁止无依据假设：不得自行假设活动发生月份/具体财周/具体日期
+
+    ## 当前日期时间
+    {{current_date}}
+
+    ## 当前数据库类型
+    {{db_type}}
+    
+    **重要提示**：
+    - 当用户提到"今天"、"昨天"、"上周"、"本月"等相对时间时，必须基于当前日期计算具体日期范围
+    - "上周"定义为最近一个完整财务周（周日至周六），不能包含本周日期
+    - 不要假设或硬编码任何日期，必须使用当前日期进行计算
+    - 不要假设数据的存在性或分布，所有判断必须基于实际查询结果
+
+    ## 历史对话上下文
+    {{history_context}}
+
+    **重要提示**：
+    - 如果历史对话中有时间范围、筛选条件等信息，当前问题可能是基于这些上下文的追问
+    - 例如：历史对话提到"上周"，当前问题是"各品类分布"，应理解为"上周各品类分布"
+    - 在 clarificationText 中必须明确说明你理解了哪些历史上下文信息
+
+    ## 当前用户问题
+    {{user_question}}
+    
+    意图类型：{{intent_type}}
+
+    选择的数据表：
+    {{selected_tables}}
+
+    语义上下文（表结构、字段描述）：
+    {{semantic_context}}
+
+    **你的任务**：
+    向用户展示你对问题的理解，包括：
+    1. **历史上下文继承**：如果是追问，说明你理解了哪些历史上下文信息
+    2. **时间信息**：问题中的时间范围是什么？（如"2023年"、"上个月"、"最近7天"，或继承自历史对话）
+    3. **维度信息**：要按什么维度分析？（如"按商品品类"、"各地区"）
+    4. **指标信息**：要查询哪些指标？（如"销售额"、"订单数量"）
+    5. **筛选条件**：有哪些筛选条件？（如"销售额大于1000"，或继承自历史对话）
+    6. **你的理解**：用一句话总结你对问题的理解
+
+    **重要**：
+    - 这是一个"展示理解"的阶段，不是"等待用户回答"的阶段
+    - 即使问题不够明确，也要展示你当前的理解，然后继续执行
+    - `needsClarification` 字段只是标记问题是否明确，不会阻止流程继续
+    - 如果是追问，必须在 clarificationText 中说明你理解了历史上下文
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 📅 财务日历时间查询指令（重要）
+
+    当用户问题中包含需要查询财务日历才能确定的时间表达时，你必须在返回的 JSON 中添加 `fiscalTimeQueries` 字段。
+    系统会根据你的指令查询财务日历数据库，获取精确的财周日期范围，然后注入到后续的 Thinking 和 SQL 生成阶段。
+
+    **需要生成 fiscalTimeQueries 的场景**：
+    - "X年Y月第N周"、"X年Y月第一周"（未出现 FM/财月/财期）→ 查询该自然月中的第N个财周（`month_week`）
+    - "FY25 年10月第一周" 这类表达（含 FY 但未出现 FM/财月/财期）→ 仍按自然月处理（`month_week`），不要改写成 `fiscal_month_week`
+      - 若用户未写明确自然年（如未写“2024年/2025年”），`month_week` 中不要填 `year`，应填 `fiscalYear`（如 `FY2025`）作为约束
+    - "FY25 FM10 第1周"、"FY2025 10财月第一周"、"财期10第1周" → 查询该财年该财月中的第N个财周（`fiscal_month_week`）
+    - "X年Y月最后一周" → 查询该自然月中的最后一个财周
+    - "X年Y月" → 查询该自然月包含的所有财周范围
+    - "上个月第一周" → 先确定上个月是几月，再查询该月第一个财周
+    - "春节前两周" → 先确定春节所在财周，再偏移 -2
+    - 任何涉及"第N周"、"最后一周"、"前N周"等需要查财务日历的表达
+
+    **不需要生成 fiscalTimeQueries 的场景**：
+    - 已经是标准财周格式：FW22、FW 15
+    - 已经是标准财月格式：FM3、FM12
+    - 简单相对时间：上周、本周、上财周、本财月（这些由 TimeResolver 正则直接处理）
+    - 明确的日期范围：2026-01-01 到 2026-01-31
+
+    **禁止假设性 fiscalTimeQueries（必须遵守）**：
+    - 若时间信息依赖“先查活动表/事件表”才能确定（例如仅给出“2025年 + 活动名”），不得输出任何假设月份（如“假设在1月”）
+    - 不允许在 `description` 中出现“假设/推测/估计/可能/待确认”后仍输出具体 `year/month/weekIndex`
+    - 这类场景必须返回 `fiscalTimeQueries: []`，并在 `analysis.timeInfo` / `filterInfo` 中明确“需先按活动名查活动表起止日期”
+
+    **fiscalTimeQueries 格式**：
+    ```json
+    "fiscalTimeQueries": [
+      {
+        "type": "month_week",
+        "year": 2026,
+        "month": 1,
+        "weekIndex": 2,
+        "description": "2026年1月第二周"
+      }
+    ]
+    ```
+
+    **支持的查询类型**：
+    | type | 必填参数 | 说明 |
+    |------|---------|------|
+    | `month_week` | year, month, weekIndex | 查询自然月中第N个财周（weekIndex从1开始，-1表示最后一个） |
+    | `fiscal_month_week` | fiscalYear, fiscalMonth, weekIndex | 查询财年+财月中的第N个财周（weekIndex从1开始，-1表示最后一个） |
+    | `month_range` | year, month | 查询自然月包含的所有财周的合并日期范围 |
+    | `fw_offset` | baseFwLabel, offset | 基于某个财周偏移N周（如春节所在周的前2周） |
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    请以JSON格式返回：
+    {
+      "needsClarification": true/false,
+      "clarificationText": "我理解您的问题是：...",
+      "clarificationQuestions": [],
+      "analysis": {
+        "isFollowUp": true/false,
+        "inheritedContext": "继承的历史上下文信息",
+        "hasTimeInfo": true/false,
+        "timeInfo": "识别到的时间信息",
+        "hasDimensionInfo": true/false,
+        "dimensionInfo": "识别到的维度信息",
+        "hasMetricInfo": true/false,
+        "metricInfo": "识别到的指标信息",
+        "hasFilterInfo": true/false,
+        "filterInfo": "识别到的筛选条件",
+        "isAmbiguous": true/false
+      },
+      "fiscalTimeQueries": []
+    }
+
+    **注意**：`fiscalTimeQueries` 为空数组 `[]` 表示不需要查询财务日历；只有当时间表达需要查财务日历才能确定时才填写。
+
+    **示例（基于历史上下文的追问）**：
+    
+    历史对话：
+    ```
+    用户: 上周各渠道的Attendance分布
+    AI助手: 【意图识别】识别到您的问题类型为：智能问数
+    【智能选表】用户选择了 survey_attendance_mock 表
+    【模型思考】用户需要查询上周各渠道的Attendance分布...
+    ```
+    
+    当前用户问题："niche票型分布情况"
+    
+    正确返回：
+    ```json
+    {
+      "needsClarification": false,
+      "clarificationText": "我理解您的问题是：查询上周 niche 渠道的票型分布情况。基于历史对话，您在上一轮询问了'上周各渠道的Attendance分布'，本轮追问'niche票型分布情况'，我理解为：在上周的时间范围内，查询 niche 渠道的票型（paidcompsp）分布。时间范围明确（上周，继承自历史对话），筛选条件明确（niche 渠道），分析维度明确（票型），查询指标明确（Attendance）。",
+      "clarificationQuestions": [],
+      "analysis": {
+        "isFollowUp": true,
+        "inheritedContext": "时间范围：上周（继承自历史对话）",
+        "hasTimeInfo": true,
+        "timeInfo": "上周（继承自历史对话）",
+        "hasDimensionInfo": true,
+        "dimensionInfo": "票型（paidcompsp）",
+        "hasMetricInfo": true,
+        "metricInfo": "Attendance",
+        "hasFilterInfo": true,
+        "filterInfo": "Channel='Niche'",
+        "isAmbiguous": false
+      }
+    }
+    ```
+
+    **示例1（问题明确）**：
+    用户问题："2023年各商品品类的销售额分别是多少"
+    返回：
+    {
+      "needsClarification": false,
+      "clarificationText": "我理解您的问题是：查询2023年各商品品类的销售额。时间范围明确（2023年），分析维度明确（商品品类），查询指标明确（销售额）。",
+      "clarificationQuestions": [],
+      "analysis": {
+        "hasTimeInfo": true,
+        "timeInfo": "2023年",
+        "hasDimensionInfo": true,
+        "dimensionInfo": "商品品类",
+        "hasMetricInfo": true,
+        "metricInfo": "销售额",
+        "hasFilterInfo": false,
+        "filterInfo": "",
+        "isAmbiguous": false
+      }
+    }
+
+    **示例2（问题不够明确，但仍继续执行）**：
+    用户问题："各地区的销售情况"
+    返回：
+    {
+      "needsClarification": true,
+      "clarificationText": "我理解您的问题是：查询各地区的销售情况。但问题缺少时间范围信息，我将默认查询所有时间的数据。同时，'销售情况'的表述较为模糊，我将查询销售额、订单数量等常见指标。",
+      "clarificationQuestions": [
+        {
+          "question": "建议补充时间范围（可选）",
+          "options": ["今天", "本周", "本月", "本年", "所有时间"],
+          "type": "single_choice"
+        },
+        {
+          "question": "建议明确查询指标（可选）",
+          "options": ["销售额", "订单数量", "客单价", "全部"],
+          "type": "multiple_choice"
+        }
+      ],
+      "analysis": {
+        "hasTimeInfo": false,
+        "timeInfo": "未指定，将查询所有时间",
+        "hasDimensionInfo": true,
+        "dimensionInfo": "地区",
+        "hasMetricInfo": false,
+        "metricInfo": "未明确指定，将查询常见销售指标",
+        "hasFilterInfo": false,
+        "filterInfo": "",
+        "isAmbiguous": true
+      }
+    }
+
+    **示例3（需要查询财务日历）**：
+    用户问题："2026年1月第二周 paid attendance 的绝对值及环比增速是多少？"
+    返回：
+    {
+      "needsClarification": false,
+      "clarificationText": "我理解您的问题是：查询2026年1月第二周的 Paid Attendance 绝对值，以及与第一周的环比增速。需要查询财务日历确定2026年1月第二周对应的具体财周。",
+      "clarificationQuestions": [],
+      "analysis": {
+        "hasTimeInfo": true,
+        "timeInfo": "2026年1月第二周（需查财务日历确定具体财周）",
+        "hasDimensionInfo": false,
+        "dimensionInfo": "",
+        "hasMetricInfo": true,
+        "metricInfo": "Paid Attendance 绝对值、环比增速",
+        "hasFilterInfo": true,
+        "filterInfo": "paidcompsp='PAID'",
+        "isAmbiguous": false
+      },
+      "fiscalTimeQueries": [
+        {
+          "type": "month_week",
+          "year": 2026,
+          "month": 1,
+          "weekIndex": 2,
+          "description": "2026年1月第二周"
+        },
+        {
+          "type": "month_week",
+          "year": 2026,
+          "month": 1,
+          "weekIndex": 1,
+          "description": "2026年1月第一周（环比基期）"
+        }
+      ]
+    }
+
+    **示例4（查询某月最后一周）**：
+    用户问题："上个月最后一周的数据"
+    当前日期：2026-02-13
+    返回：
+    {
+      "needsClarification": false,
+      "clarificationText": "我理解您的问题是：查询2026年1月最后一周的数据。",
+      "clarificationQuestions": [],
+      "analysis": {
+        "hasTimeInfo": true,
+        "timeInfo": "2026年1月最后一周（需查财务日历）",
+        "hasDimensionInfo": false,
+        "dimensionInfo": "",
+        "hasMetricInfo": false,
+        "metricInfo": "",
+        "hasFilterInfo": false,
+        "filterInfo": "",
+        "isAmbiguous": true
+      },
+      "fiscalTimeQueries": [
+        {
+          "type": "month_week",
+          "year": 2026,
+          "month": 1,
+          "weekIndex": -1,
+          "description": "2026年1月最后一周"
+        }
+      ]
+    }
+
+thinking:
+  name: "模型思考"
+  version: "2.3"
+  description: "分析问题并说明解决思路（支持历史对话上下文）"
+  variables: ["user_question", "selected_tables", "semantic_context", "history_context", "current_date", "clarification_result", "db_type"]
+  content: |
+    请分析用户问题并说明你将如何解决这个问题：
+
+    ## 输出纪律（防复读，与业务规则同级重要）
+    - 用业务语言直接写分析结论与步骤；**禁止**逐条复述本提示或语义上下文中的规则原文（不要写「注意：本提示要求…」「最终输出」「必须遵守以下…」等元话术）。
+    - 同一条约束（如「先查活动表定区间」「禁止无依据假设」）全文**最多提及一次**，合并进「问题分析」或「解决思路」即可，不要分多段重复。
+    - 总篇幅控制在约 **800 字以内**；若信息不足，用一两句写清「缺什么证据、下一步查哪张表/哪个字段」即可收笔。
+    - 不要虚构「开始/结束」标签或多次重写同一小节；按下方 **1→2→3→4** 顺序各写一遍即结束。
+
+    **🚫 禁止无依据假设（最高优先级）**：
+    - 不得凭空设定具体时间（月份/财周/日期）或具体筛选值
+    - 若上下文仅给出年份或模糊活动名，必须先说明“需先查活动表/权威上下文确定区间”
+    - 证据不足时输出“不确定 + 需要的查询步骤”，而不是给出猜测结论
+
+    ## 当前日期时间
+    {{current_date}}
+
+    ## 当前数据库类型
+    {{db_type}}
+    - 如果是 SQL 相关推理，必须基于 {{db_type}} 方言思考
+    - 当 {{db_type}} = SQL Server 时，结果限制优先使用 TOP / OFFSET ... FETCH，禁止使用 LIMIT
+    - 当 {{db_type}} = MySQL 时，使用 LIMIT 做结果限制
+    
+    **🔒 时间计算规则（必须严格遵守）**：
+    
+    当用户提到相对时间时，必须基于当前日期计算具体日期范围：
+    
+    1. **"上周" / "Last week"**：
+       - 定义：最近一个**完整**的财务周（周日至周六，共7天）
+       - 计算方法：找到当前日期之前最近的一个完整周
+       - 示例：当前 2026-02-13（星期五）
+         - 2026年2月日历：
+           ```
+           Su Mo Tu We Th Fr Sa
+            1  2  3  4  5  6  7
+            8  9 10 11 12 13 14
+           15 16 17 18 19 20 21
+           ```
+         - 本周：2026-02-08（周日）至 2026-02-14（周六）← 尚未完成
+         - **上周**：2026-02-01（周日）至 2026-02-07（周六）← 完整的7天
+       - ⚠️ 常见错误：
+         - 错误1：2026-02-02（日）至 2026-02-08（六）← 2月2日是周一不是周日
+         - 错误2：2026-02-08（日）至 2026-02-14（六）← 这是本周不是上周
+    
+    2. **"本周"**：当前所在财务周（本周日到今天）
+    3. **"今天"**：当前日期
+    4. **"昨天"**：当前日期的前一天
+    5. **"本月"**：当前月份第一天到今天
+    
+    **重要**：
+    - 不要假设或硬编码日期，必须基于当前日期动态计算
+    - "上周"必须是一个**完整**的周（周日至周六，共7天）
+    - 不能包含本周的任何日期
+    - 请仔细确认日期对应的星期几，不要自己推断
+    - 你的思考结果将传递给 SQL 生成阶段，请明确说明时间范围的计算逻辑
+
+    **🚫 农历/节假日日期幻觉防止规则（必须严格遵守）**：
+    - ❌ **绝对禁止**：自行推算、猜测或"记忆"任何农历节日（春节、中秋、国庆等）的公历日期
+    - ❌ **绝对禁止**：基于训练数据中的"印象"来确定节假日日期（例如："我知道2026年春节是X月X日"）
+    - ✅ **唯一正确做法**：节假日的具体日期**只能**来自下方"语义上下文"中的**知识库事件数据**
+    - ✅ 如果知识库中有该节假日的事件记录，使用知识库中的日期
+    - ✅ 如果知识库中**没有**该节假日的事件记录，明确告知用户"知识库中未找到该节假日的日期信息，无法确定准确的时间范围"
+    - 原因：农历转公历的计算极易出错（例如：2025年春节=1月29日，2026年春节=2月17日，模型极易混淆）
+
+    ## 历史对话上下文
+    {{history_context}}
+
+    **重要提示**：
+    - 如果历史对话中有时间范围、筛选条件等信息，必须在 SQL 中体现
+    - 例如：历史对话提到"上周"，当前问题是"niche票型分布"，SQL 应包含上周的时间范围和 niche 渠道的筛选
+    - 在问题分析中必须明确说明继承了哪些历史上下文
+    
+    ## 意图澄清结果
+    {{clarification_result}}
+    
+    **重要提示**：
+    - 意图澄清阶段已经分析了时间信息、维度信息、指标信息等
+    - 请基于澄清结果进行思考，确保理解一致
+
+    ## 当前用户问题
+    {{user_question}}
+
+    选择的数据表：
+    {{selected_tables}}
+
+    语义上下文（表结构、字段、关联关系）：
+    {{semantic_context}}
+
+    ## 🔗 跨粒度关联规则（必须遵守）
+    当参与查询的表粒度不一致（例如：财周粒度事实表 + 日粒度日历表 + 日期区间条件）时，必须先做粒度对齐，再做聚合：
+    1. 若问题目标指标来自财周粒度事实表（如 survey_attendance_mock.ATTN）：
+       - 必须先在日粒度表中筛选条件（节假日/任何日期区间条件）
+       - 再将日粒度结果去重映射为财周键集合（例如 FY_N/FW_N 或 fiscal_year_number/fiscal_week_number）
+       - 最后再与财周事实表关联取值
+    2. 严禁直接将财周粒度事实表按日期展开到日粒度后再汇总（会造成 1周×7天 放大）。
+    3. 对“春节跨两周”“活动跨多周”这类问题，采用“命中周即取整周”：
+       - 先确定命中的财周集合
+       - 再按周集合回捞整周 Attendance。
+
+    请按照以下格式输出你的思考过程（用自然语言，不要返回 JSON）：
+
+    1. **问题分析**：
+       - 如果是追问，说明你理解了哪些历史上下文（如时间范围、筛选条件）
+       - 用户想要查询什么数据？
+       - 涉及哪些维度和指标？
+       - 是否需要时间范围筛选？（包括继承自历史对话的时间范围）
+       - 是否需要分组聚合？
+
+    2. **解决思路**：
+       - 这是一个什么类型的查询（简单查询/分组聚合/多表关联/时间序列分析）？
+       - 需要使用哪些表？
+       - 需要哪些字段？
+       - 需要什么样的 JOIN 关系？
+       - 需要什么样的 WHERE 条件？（包括继承自历史对话的条件）
+       - 需要什么样的 GROUP BY 和聚合函数？
+
+    3. **查询意图判断（必须思考，直接影响 SQL 结构）**：
+       用户问的是**汇总洞察**还是**原始明细**？这决定了 SQL 是否需要 GROUP BY。
+
+       **🔒 强制规则：以下问题类型必须使用 GROUP BY 聚合，禁止返回原始明细行**
+
+       | 问题类型 | 关键词 | 必须的 GROUP BY 维度 | 预期结果行数 |
+       |---------|--------|---------------------|------------|
+       | 趋势分析 | 趋势、变化、增长、走势、每周、按月、按季度、同比、环比 | 时间维度（FW_N/FM_N/FY_N/日期） | 等于时间段数量，如52周、12月 |
+       | 分布分析 | 分布、占比、构成、各渠道、各品类、各地区 | 分类维度（Channel/region/category） | 等于分类数量，通常5~30条 |
+       | 排名分析 | Top N、排名、最多、最少、最高、最低 | 排名维度 + ORDER BY + LIMIT N | 等于 N |
+       | 对比分析 | 对比、比较、差异、YoY、MoM | 对比维度 | 等于对比组数量 |
+
+       **❌ 禁止场景**：
+       - 用户问"各周趋势" → 禁止 `SELECT * FROM table`（返回每行原始记录）
+       - 用户问"各渠道分布" → 禁止不加 GROUP BY 直接返回明细
+       - 任何包含"趋势/变化/分布/对比"的问题 → 禁止返回超过 100 条结果
+
+       **✅ 唯一允许返回明细的情况**：用户明确说"列出所有记录"、"查看详情"、"导出"，此时 LIMIT 最大 50。
+
+       明确说出：这个问题是**哪种查询类型**，GROUP BY 的维度是什么，预期返回几条结果。
+
+    4. **SELECT 字段清单（同比/环比类查询必须输出，SQL 生成阶段将严格遵守）**：
+       当问题涉及同比（YoY）、环比（MoM/QoQ）或任何对比分析时，必须在思考结果中明确列出 SQL 的 SELECT 字段清单，包含以下四类字段（缺一不可）：
+       - ✅ 当期原始指标值（如 `SUM(ATTN) AS current_attendance`）
+       - ✅ 基期原始指标值（如 `SUM(ATTN_LY) AS prior_year_attendance`）
+       - ✅ 绝对差值（如 `SUM(ATTN) - SUM(ATTN_LY) AS abs_change`）
+       - ✅ 变化率（如 `ROUND((...) / NULLIF(..., 0) * 100, 2) AS pct_change`）
+
+       **⚠️ 常见错误**：只输出变化率和差值，遗漏当期/基期原始值。
+       这会导致下游图表推荐阶段没有指标绝对值可用，被迫将维度列（如 FW_N=17）误当数值使用。
+
+       **示例（同比趋势查询的 SELECT 字段清单）**：
+       ```
+       SELECT 字段清单：
+       - FW_N, FW_START_DATE, FW_END_DATE（维度/分组键）
+       - ROUND(SUM(ATTN), 0) AS current_attendance（当期指标值）
+       - ROUND(SUM(ATTN_LY), 0) AS prior_year_attendance（基期指标值）
+       - ROUND(SUM(ATTN) - SUM(ATTN_LY), 0) AS abs_change（绝对差值）
+       - ROUND((SUM(ATTN) - SUM(ATTN_LY)) / NULLIF(SUM(ATTN_LY), 0) * 100, 2) AS pct_change（变化率）
+       ```
+
+    请用中文自然语言回答，保持专业和易懂。不要返回 JSON 格式。
+
+    **示例输出（追问场景）**：
+    
+    历史对话：
+    ```
+    用户: 上周各渠道的Attendance分布
+    AI助手: 【意图识别】识别到您的问题类型为：智能问数
+    【智能选表】用户选择了 survey_attendance_mock 表
+    【SQL生成】SELECT Channel, SUM(ATTN) AS total_attendance FROM survey_attendance_mock WHERE FW_START_DATE >= '2026-02-01' AND FW_END_DATE <= '2026-02-07' GROUP BY Channel
+    ```
+    
+    当前用户问题："niche票型分布情况"
+    
+    正确输出：
+    ```
+    1. **问题分析**：
+    用户在上一轮询问了"上周各渠道的Attendance分布"，本轮追问"niche票型分布情况"。我理解用户想要查询**上周 niche 渠道的票型分布**。
+    
+    继承的历史上下文：
+    - 时间范围：上周（2026-02-01 至 2026-02-07）
+    - 数据表：survey_attendance_mock
+    
+    当前问题的关键信息：
+    - 筛选条件：Channel='Niche'（niche 渠道）
+    - 分析维度：paidcompsp（票型）
+    - 查询指标：ATTN（Attendance）
+    - 需要分组聚合：按票型分组，统计总 Attendance
+    
+    2. **解决思路**：
+    这是一个基于历史上下文的分组聚合查询。需要：
+    - 使用表：survey_attendance_mock
+    - 关键字段：Channel（渠道筛选）、paidcompsp（票型分组）、ATTN（统计指标）、FW_START_DATE/FW_END_DATE（时间筛选）
+    - WHERE 条件：
+      - Channel = 'Niche'（筛选 niche 渠道）
+      - FW_START_DATE >= '2026-02-01' AND FW_END_DATE <= '2026-02-07'（继承上周的时间范围）
+    - GROUP BY：paidcompsp（按票型分组）
+    - 聚合函数：SUM(ATTN)（统计总 Attendance）
+    
+    4. **实现计划**：
+       - 可以通过一次 SQL 查询完成，还是需要多次查询？
+       - SQL 的大致结构是什么？（必须包含 GROUP BY，除非第3步判断为明细查询）
+    ```sql
+    SELECT paidcompsp, SUM(ATTN) AS total_attendance
+    FROM survey_attendance_mock
+    WHERE Channel = 'Niche' 
+      AND FW_START_DATE >= '2026-02-01' 
+      AND FW_END_DATE <= '2026-02-07'
+    GROUP BY paidcompsp
+    ORDER BY total_attendance DESC
+    ```
+    ```
+
+sql_generation:
+  name: "SQL生成"
+  version: "3.1"
+  description: "根据澄清后的需求生成SQL查询（支持历史对话上下文、条件聚合、语义字典强制查阅）"
+  variables: ["original_question", "clarified_requirement", "semantic_context", "db_type", "history_context", "current_date", "thinking_result"]
+  content: |
+    请根据用户需求生成SQL查询语句：
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 即使无法完全确定，也必须返回合法 JSON（在 explanation 中说明缺失信息，不得写入猜测条件）
+    - 禁止无依据假设：不得把“可能的日期/财周/字段值”直接写入 SQL
+
+    ## 当前日期时间
+    {{current_date}}
+    
+    **🔒 时间计算规则（必须严格遵守）**：
+    
+    当用户提到相对时间时，必须基于当前日期计算具体日期范围：
+    
+    1. **"上周" / "Last week"**：
+       - 定义：最近一个**完整**的财务周（周日至周六，共7天）
+       - 计算方法：找到当前日期之前最近的一个完整周
+       - 示例：当前 2026-02-13（星期五）
+         - 2026年2月日历：
+           ```
+           Su Mo Tu We Th Fr Sa
+            1  2  3  4  5  6  7
+            8  9 10 11 12 13 14
+           ```
+         - 本周：2026-02-08（周日）至 2026-02-14（周六）
+         - **上周**：2026-02-01（周日）至 2026-02-07（周六）
+       - ⚠️ 常见错误：
+         - 错误1：2026-02-02（日）至 2026-02-08（六）← 2月2日是周一
+         - 错误2：2026-02-08（日）至 2026-02-14（六）← 这是本周
+      - SQL 实现：若上下文已有明确 FW 映射（如 FW_N/FW_LABEL），优先使用财周字段；若仅有已解析日期区间，也可使用 FW_START_DATE/FW_END_DATE
+    
+    2. **"本周"**：当前所在财务周（本周日到今天）
+    3. **"今天"**：DATE(NOW()) 或 CURDATE()
+    4. **"昨天"**：DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+    5. **"本月"**：YEAR(NOW()) 和 MONTH(NOW())
+    
+    **重要**：
+    - 不要假设或硬编码日期（如固定写死某一天）
+    - 必须基于当前日期动态计算
+    - "上周"必须是一个**完整**的周，不能包含本周的任何日期
+    - 优先使用财周字段（FW_N）进行筛选；仅在缺少 FW 映射但已有权威日期区间时使用日期范围匹配
+    - **口径优先级（硬约束）**：
+      1) 用户问题若显式出现 `FYxx` 且出现财务期间表达（`FW/FM/FQ`，例如 `FY25 October`、`FY26 FM3`、`FY25 Q1`），SQL 必须只使用财务口径字段（`FY_N/FM_N/FW_N` 或对应 fiscal_*_number），禁止叠加 `FW_START_DATE/FW_END_DATE`。
+      2) 用户问题若仅提供自然日期范围（或系统仅解析出日期区间且无显式 FY+财务期间），SQL 才使用 `FW_START_DATE/FW_END_DATE`（或日历日期）过滤。
+      3) **禁止混用**：同一 SQL 中不得同时出现 `FY_N/FM_N/FW_N` 过滤与 `FW_START_DATE/FW_END_DATE` 过滤。
+
+    **🚫 农历/节假日日期幻觉防止规则（必须严格遵守）**：
+    - ❌ **绝对禁止**：自行推算、猜测或"记忆"任何农历节日（春节、中秋、国庆等）的公历日期
+    - ❌ **绝对禁止**：基于训练数据中的"印象"来确定节假日日期（例如："Spring Festival 2026 starts on January 29"）
+    - ✅ **唯一正确做法**：节假日的具体日期**只能**来自下方"语义增强上下文"中的**知识库事件数据**
+    - ✅ 如果知识库中有该节假日的事件记录，使用知识库中明确标注的日期范围
+    - ✅ 如果知识库中**没有**该节假日的事件记录，在 explanation 中说明"Knowledge base does not contain date information for this holiday; cannot determine accurate time range"，并提示用户在知识库中添加该事件
+    - 原因：农历转公历极易出错（2025年春节=1月29日，2026年春节=2月17日，相差19天，模型极易混淆年份）
+
+    ## 🔗 跨粒度 JOIN 规则（必须遵守）
+    1. 当事实表是财周粒度（如 survey_attendance_mock），维表是日粒度（如 fiscal_calendar_holidays）时：
+       - 先在日粒度维表筛选（例如 holiday_name、任意日期区间）
+       - 产出 DISTINCT 财周键集合（fiscal_year_number, fiscal_week_number）
+       - 再与事实表按财周键（FY_N, FW_N）关联
+    2. 对任何日期区间条件（包括但不限于活动起止日期、事件起止日期、自定义开始结束日）：
+       - 先在日历表上执行区间筛选（例如 `calendar_date BETWEEN start_date AND end_date`）
+       - 再去重到财周集合后关联事实表
+    3. 禁止直接把财周事实表与日历表按日期明细展开后聚合（避免重复放大）。
+    4. 业务规则“节日/活动命中财周即取整周”必须落实为“先周集合后取值”。
+
+    ## ⚖️ 分类拆分互斥规则（必须遵守）
+    当问题要求“工作日 vs 节假日”对比，并且需要把周粒度指标（如 `ATTN`）按天数占比分摊时：
+    1. `workday_days` 与 `holiday_days` 必须互斥且完备，禁止同一天被同时计入两类。
+    2. 若 `workday_days` 的定义为 `is_weekday='Y' AND 非节假日`，则 `holiday_days` 应使用其补集（如 `NOT(workday_condition)`）或等价互斥条件。
+    3. 严禁使用会重叠的定义（例如 `workday_days: is_weekday='Y'` 且 `holiday_days: is_holiday='Y'`），否则分摊后两类合计可能大于原始总量。
+    4. 最终结果必须满足可回加原则：`workday_attendance + holiday_attendance` 应与同口径总量一致（允许极小四舍五入误差）。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 📖 业务术语映射规则（最高优先级，必须最先执行）
+
+    在生成任何 SQL 之前，必须先在下方 semantic_context 中查找所有业务术语的定义：
+
+    1. **强制查阅**：对用户问题中出现的每一个业务术语（如 "Paid attendance"、"Domestic"、"YoY"），必须先在 semantic_context 中查找其对应的字段名和过滤条件
+    2. **严格应用**：如果找到定义（如 `业务术语: Paid Attendance → 过滤条件: paidcompsp = 'PAID'`），必须在 WHERE 子句中应用该**精确**过滤条件，不得修改字段名或值
+    3. **禁止猜测**：禁止自行猜测或推断未在 semantic_context 中定义的业务术语含义；如果某术语未定义，在 explanation 中说明"未在 semantic_context 中找到该术语的定义，已基于字段名推断"
+    4. **地理分组**：当 semantic_context 中包含地理分组定义（如 "Domestic = Shanghai + Neighboring Provinces + Other China"），必须使用 `IN (...)` 过滤对应字段值，不得使用单值等号
+    5. **值不翻译**：字段值必须使用 semantic_context 中定义的原始值（如 `region5_C = 'Other China'`），禁止翻译为其他语言（如 `'其他中国'`）
+
+    ## 🧭 字段判定语义规则（通用能力，必须遵守）
+    - semantic_context 若提供“字段判定提示”或“值样本”，必须优先按该语义生成条件
+    - 对二值/枚举字段（如值样本为 `Y/N`、`1/0`），类别判断必须使用等值条件（`=`/`IN`）
+    - 禁止用 `IS NOT NULL`、`!= ''`、`<> ''` 代表某个业务类别（这会把 `N`/`0` 误判为命中）
+    - 若字典与值样本冲突，以字典定义优先；若都缺失，在 explanation 说明“不确定，需要补充字段语义”
+
+    ## 字典与值样本 → SQL 字面量（最高优先级，硬约束）
+    - 凡 semantic_context 中为某列提供了「字典枚举」或「值样本」的，对该列写 `=` / `IN` 时，**必须使用其中出现的原文**（含大小写与语言；例如样本为 `Shanghai` 则禁止写成 `'上海'`；样本为 `Family` 则禁止写成 `'家庭游客'`）。
+    - 用户问题中的中文地名、客群、渠道等**仅用于理解意图**，禁止不经语义上下文映射就直接当作该列的字符串字面量写入 SQL。
+    - 若上下文同时有业务中文说明且值样本仅为英文库值，**以值样本与字典 code 为准** 生成 WHERE。
+    - 缺少该列枚举或值样本证据时，不得在 explanation 中声称已按字典筛选；应说明证据不足并避免编造字面量。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 📊 对比分析类 SQL 规范（条件聚合）
+
+    当用户要求对比两个或多个时间段（YoY、MoM、QoQ）时，必须遵守以下规则：
+
+    **规则 A：必须使用条件聚合（Conditional Aggregation）**
+    - ✅ 正确：使用 `SUM(CASE WHEN period_condition THEN metric ELSE 0 END)` 在单条 SQL 中完成多期对比
+    - ❌ 禁止：使用多层嵌套 JOIN 来实现同环比计算（如 `t1 JOIN t2 ON t1.id = t2.id JOIN t3 ON ...`）
+
+    **规则 B：SELECT 子句必须包含四要素（零容忍，违反即为无效 SQL）**
+    任何涉及同比（YoY）、环比（MoM/QoQ）或对比分析的 SQL，SELECT 子句必须同时包含以下四类字段，缺一不可：
+    1. 当期原始指标值（如 `ROUND(SUM(ATTN), 0) AS current_attendance`）
+    2. 基期原始指标值（如 `ROUND(SUM(ATTN_LY), 0) AS prior_year_attendance`）
+    3. 绝对差值（`current - prior AS abs_change`）
+    4. 变化率：`ROUND((current - prior) / NULLIF(prior, 0) * 100, 2) AS pct_change`
+    - `NULLIF(prior, 0)` 防止除零错误，必须使用
+
+    **⚠️ 仅返回差值和变化率而不返回原始指标值 = 无效 SQL**
+    原因：下游图表推荐和数据描述阶段依赖原始指标值来生成柱状图和摘要。
+    如果缺少原始指标值，图表推荐会被迫将维度列（如 FW_N=17）误当数值使用，
+    数据描述会将维度值误读为指标值（如"Paid Attendance 为 17"）。
+
+    **自检清单**：生成 SQL 后，逐一检查 SELECT 中是否同时包含：
+    - [ ] 当期原始值列（如 current_attendance）
+    - [ ] 基期原始值列（如 prior_year_attendance）
+    - [ ] 绝对差值列（如 abs_change）
+    - [ ] 变化率列（如 pct_change）
+    如果任一缺失，必须补全后再输出。
+
+    **条件聚合示例（Q01-05 模式：月度环比）**：
+    ```sql
+    SELECT
+      group_C,
+      SUM(CASE WHEN FM_N = 11 THEN ATTN ELSE 0 END) AS atten_nov,
+      SUM(CASE WHEN FM_N = 12 THEN ATTN ELSE 0 END) AS atten_dec,
+      SUM(CASE WHEN FM_N = 12 THEN ATTN ELSE 0 END) -
+        SUM(CASE WHEN FM_N = 11 THEN ATTN ELSE 0 END) AS abs_change,
+      ROUND(
+        (SUM(CASE WHEN FM_N = 12 THEN ATTN ELSE 0 END) -
+         SUM(CASE WHEN FM_N = 11 THEN ATTN ELSE 0 END)) /
+        NULLIF(SUM(CASE WHEN FM_N = 11 THEN ATTN ELSE 0 END), 0) * 100, 2
+      ) AS pct_change
+    FROM survey_attendance_mock
+    WHERE FY_N = 2025 AND FM_N IN (11, 12) AND paidcompsp = 'PAID'
+    GROUP BY group_C
+    ORDER BY abs_change DESC
+    ```
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 📈 Top-N 增长排名规则（子查询模式）
+
+    当用户要求按增长率排名（如"增长最快的 Top 3 地区"）时，必须使用子查询或 CTE：
+    - 在内层子查询中计算增长率
+    - 在外层查询中应用 ORDER BY 和 LIMIT
+
+    **Top-N 增长排名示例（Q01-08 模式）**：
+    ```sql
+    SELECT region5_C, growth_rate
+    FROM (
+      SELECT region5_C,
+        SUM(CASE WHEN FM_N IN (1,2,3) THEN ATTN ELSE 0 END) AS q3_sum,
+        SUM(CASE WHEN FM_N IN (4,5,6) THEN ATTN ELSE 0 END) AS q4_sum,
+        ROUND(
+          (SUM(CASE WHEN FM_N IN (4,5,6) THEN ATTN ELSE 0 END) -
+           SUM(CASE WHEN FM_N IN (1,2,3) THEN ATTN ELSE 0 END)) /
+          NULLIF(SUM(CASE WHEN FM_N IN (1,2,3) THEN ATTN ELSE 0 END), 0) * 100, 2
+        ) AS growth_rate
+      FROM survey_attendance_mock
+      WHERE FY_N = 2025 AND paidcompsp = 'PAID'
+      GROUP BY region5_C
+      HAVING q3_sum > 0
+    ) t
+    ORDER BY growth_rate DESC
+    LIMIT 3
+    ```
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 模型思考结果
+    {{thinking_result}}
+    
+    **重要提示**：
+    - 模型思考阶段已经分析了问题的解决思路和时间范围计算逻辑
+    - 请基于思考结果生成 SQL，确保时间范围计算逻辑一致
+    - **思考阶段已判断了查询类型（汇总/明细）和 GROUP BY 维度，SQL 必须严格遵守**：
+      - 思考结论为"趋势/分布/对比/排名"类 → SQL 必须包含 GROUP BY + 聚合函数，禁止返回原始明细行
+      - 思考结论为"明细"类 → SQL 必须包含 LIMIT ≤ 50
+      - **任何情况下，SQL 返回结果不得超过 100 条**
+
+    ## 历史对话上下文
+    {{history_context}}
+
+    **重要提示**：
+    - 如果是追问，必须从历史对话中提取时间范围、筛选条件等上下文信息
+    - 将历史上下文信息转换为 SQL 的 WHERE 条件
+    - 例如：历史对话提到"上周"，当前问题是"niche票型分布"，SQL 应包含上周的时间范围和 niche 渠道的筛选条件
+
+    ## 用户原始问题
+    {{original_question}}
+    
+    ## 澄清后的需求
+    {{clarified_requirement}}
+
+    ## 语义增强上下文
+    {{semantic_context}}
+
+    ## 数据库类型
+    {{db_type}}
+
+    请生成标准的SQL查询语句，要求：
+    1. 语法正确，符合{{db_type}}数据库规范
+    2. 字段名和表名准确
+    3. 查询逻辑符合用户需求
+    4. 包含必要的WHERE条件和GROUP BY子句（包括继承自历史对话的条件）
+    5. **🔒 结果集强制限制（必须遵守）**：
+       - 用户查询的数据结果不会超过 100 条，以此为上限思考用户真实需求
+       - 如果用户问的是"Top N"、"排名"、"最多/最少"等，结果行数应等于 N（通常 ≤ 20）
+       - 如果用户问的是"分布"、"各渠道"、"各品类"等分组汇总，结果行数通常 ≤ 50
+       - 如果用户问的是明细数据，结果行数最大为 100
+       - **MySQL**：必须包含 `LIMIT`，且值不得超过 100
+       - **SQL Server**：必须使用 `TOP` 或 `OFFSET ... FETCH` 进行等价限行，且值不得超过 100
+       - **强制方言规则**：当 `{{db_type}}` 为 SQL Server 时，最终 SQL 中禁止出现 `LIMIT` 关键字；当 `{{db_type}}` 为 MySQL 时，必须使用 `LIMIT`
+    6. **🔗 UNION / UNION ALL 语法规则（重要）**：
+       - 当使用 UNION 或 UNION ALL 时，**每个子查询必须用括号包裹**
+       - 尤其是子查询中含有 ORDER BY 或 LIMIT 时，括号是 MySQL 的强制要求
+       - ✅ 正确写法：
+         ```sql
+         (SELECT 'MAX' AS type, col FROM t ORDER BY col DESC LIMIT 1)
+         UNION ALL
+         (SELECT 'MIN' AS type, col FROM t ORDER BY col ASC LIMIT 1)
+         ```
+       - ❌ 错误写法（会报 1064 语法错误）：
+         ```sql
+         SELECT 'MAX' AS type, col FROM t ORDER BY col DESC LIMIT 1
+         UNION ALL
+         SELECT 'MIN' AS type, col FROM t ORDER BY col ASC LIMIT 1
+         ```
+    7. **🔢 数值格式化规则（重要）**：
+       - **整数去除小数**：对于非百分比的整数字段（如 count、数量），使用 `ROUND(字段, 0)` 去除小数
+       - **百分比保留两位**：对于百分比字段（字段名包含 rate、ratio、percent、pct），使用 `ROUND(字段, 2)` 保留两位小数
+       - **大数值直接返回原始数值**：不要在 SQL 中做 K/千分位格式化，直接返回纯数字，由前端和描述层处理展示格式
+       - **示例**：
+         ```sql
+         SELECT 
+           Channel,
+           ROUND(SUM(ATTN), 0) AS total_attendance,
+           ROUND(AVG(Sample_Size), 0) AS avg_sample_size
+         FROM survey_attendance_mock
+         GROUP BY Channel
+         ```
+    8. **🚫 MySQL 保留字别名规则（必须遵守，避免语法错误）**：
+       - **禁止**将以下 MySQL 保留字直接用作列别名（不加反引号）：
+         `year`, `month`, `date`, `time`, `day`, `week`, `hour`, `minute`, `second`,
+         `year_month`, `key`, `value`, `name`, `status`, `type`, `group`, `order`,
+         `index`, `select`, `from`, `where`, `table`, `column`, `row`, `rank`,
+         `interval`, `range`, `match`, `read`, `write`, `lock`, `show`, `set`
+       - **正确做法**：在保留字前加前缀或使用描述性名称，例如：
+         - ❌ 错误：`SUM(ATTN) AS year_month`
+         - ✅ 正确：`SUM(ATTN) AS period_year_month`
+         - ❌ 错误：`COUNT(*) AS value`
+         - ✅ 正确：`COUNT(*) AS total_value`
+         - ❌ 错误：`Channel AS name`
+         - ✅ 正确：`Channel AS channel_name`
+       - **规则**：别名必须是描述性的英文词组（如 `total_attendance`、`avg_sample`、`period_label`），不得使用单个保留字
+    9. **🔒 MySQL `only_full_group_by` 兼容性规则（必须遵守，避免 1055 错误）**：
+       - MySQL 默认启用 `only_full_group_by` 模式，要求 SELECT 中的非聚合列必须出现在 GROUP BY 中
+       - **核心原则**：SELECT 中的非聚合表达式必须与 GROUP BY 中的表达式**字符级别完全一致**
+       - **常见错误场景**：SELECT 用 `CONCAT(YEAR(col), '-', LPAD(MONTH(col), 2, '0'))` 做月份标签，但 GROUP BY 只写 `YEAR(col), MONTH(col)`
+         - MySQL 不认为 `YEAR(col)` 在 GROUP BY 中就能让 `CONCAT(YEAR(col), ...)` 合法
+       - ✅ **正确写法（GROUP BY 表达式与 SELECT 完全一致）**：
+         ```sql
+         SELECT
+           CONCAT(YEAR(FW_START_DATE), '-', LPAD(MONTH(FW_START_DATE), 2, '0')) AS period_month,
+           ROUND(SUM(ATTN), 0) AS total_attendance
+         FROM survey_attendance_mock
+         WHERE FY_N = 2025 AND paidcompsp = 'PAID'
+         GROUP BY CONCAT(YEAR(FW_START_DATE), '-', LPAD(MONTH(FW_START_DATE), 2, '0'))
+         ORDER BY period_month
+         LIMIT 12
+         ```
+       - ❌ **错误写法（GROUP BY 与 SELECT 表达式不一致，触发 1055 错误）**：
+         ```sql
+         SELECT
+           CONCAT(YEAR(FW_START_DATE), '-', LPAD(MONTH(FW_START_DATE), 2, '0')) AS period_month,
+           ROUND(SUM(ATTN), 0) AS total_attendance
+         FROM survey_attendance_mock
+         WHERE FY_N = 2025 AND paidcompsp = 'PAID'
+         GROUP BY YEAR(FW_START_DATE), MONTH(FW_START_DATE)
+         ORDER BY period_month
+         LIMIT 12
+         ```
+       - **替代方案（推荐：使用 DATE_FORMAT 简化）**：
+         ```sql
+         SELECT
+           DATE_FORMAT(FW_START_DATE, '%Y-%m') AS period_month,
+           ROUND(SUM(ATTN), 0) AS total_attendance
+         FROM survey_attendance_mock
+         WHERE FY_N = 2025 AND paidcompsp = 'PAID'
+         GROUP BY DATE_FORMAT(FW_START_DATE, '%Y-%m')
+         ORDER BY period_month
+         LIMIT 12
+         ```
+       - **自检清单**：生成 SQL 后，逐一检查 SELECT 中每个非聚合表达式是否在 GROUP BY 中有**完全相同**的对应项
+    10. **🔄 MySQL 与 SQL Server 语法对照表（必须根据 `{{db_type}}` 选择正确语法）**：
+       - 生成 SQL 前必须检查 `{{db_type}}`，严格使用对应数据库的语法，禁止混用
+       - | 功能 | MySQL 语法 | SQL Server 语法 |
+         |------|-----------|----------------|
+         | 结果集限制 | `SELECT * FROM t LIMIT 10` | `SELECT TOP 10 * FROM t` |
+         | 空值处理 | `IFNULL(col, val)` 或 `COALESCE(col, val)` | `ISNULL(col, val)` 或 `COALESCE(col, val)` |
+         | 当前日期时间 | `NOW()`（日期+时间）/ `CURDATE()`（仅日期） | `GETDATE()`（日期+时间）/ `CAST(GETDATE() AS DATE)`（仅日期） |
+         | 日期加法 | `DATE_ADD(col, INTERVAL 1 MONTH)` | `DATEADD(MONTH, 1, col)` |
+         | 日期减法 | `DATE_SUB(col, INTERVAL 1 DAY)` | `DATEADD(DAY, -1, col)` |
+         | 日期差值 | `DATEDIFF(end, start)`（仅天数，注意参数顺序：end在前） | `DATEDIFF(DAY, start, end)`（需指定单位，start在前） |
+         | 日期格式化 | `DATE_FORMAT(col, '%Y-%m')` | `FORMAT(col, 'yyyy-MM')` 或 `CONVERT(VARCHAR, col, 120)` |
+         | 字符串拼接 | `CONCAT(col1, '-', col2)` | `CONCAT(col1, '-', col2)` 或 `col1 + '-' + col2` |
+         | 字符串长度 | `CHAR_LENGTH(col)`（字符数）/ `LENGTH(col)`（字节数） | `LEN(col)`（字符数，去尾空格）/ `DATALENGTH(col)`（字节数） |
+         | 条件表达式 | `IF(cond, true_val, false_val)` 或 `CASE WHEN` | `IIF(cond, true_val, false_val)` 或 `CASE WHEN` |
+         | 类型转换 | `CAST(col AS CHAR)` / `CAST(col AS SIGNED)` | `CAST(col AS VARCHAR)` / `CAST(col AS INT)` |
+         | 取整/截断 | `TRUNCATE(col, 2)` / `ROUND(col, 2)` | `ROUND(col, 2)` / `ROUND(col, 2, 1)`（第3参数1=截断） |
+         | 自增列 | `AUTO_INCREMENT` | `IDENTITY(1,1)` |
+         | 分页查询 | `LIMIT 10 OFFSET 20` | `OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY`（SQL Server 2012+） |
+         | 正则匹配 | `col REGEXP 'pattern'` | `col LIKE '%pattern%'`（无原生正则，需 CLR 或 LIKE） |
+         | GROUP_CONCAT | `GROUP_CONCAT(col SEPARATOR ',')` | `STRING_AGG(col, ',')`（SQL Server 2017+） |
+         | 反引号/方括号 | 用反引号包裹标识符：`` `column` `` | 用方括号包裹标识符：`[column]` |
+       - **通用兼容语法**（MySQL 和 SQL Server 均支持）：
+         - `COALESCE(col, val)` — 空值处理
+         - `CASE WHEN cond THEN val1 ELSE val2 END` — 条件表达式
+         - `CAST(col AS type)` — 类型转换（注意具体类型名称可能不同）
+         - `CONCAT()` — 字符串拼接（SQL Server 2012+ 支持）
+         - `ROUND(col, n)` — 四舍五入
+
+    请以JSON格式返回：
+    {
+      "sql": "生成的SQL语句（包含数值格式化）",
+      "explanation": "SQL逻辑说明（如果使用了历史上下文，请说明；说明数值格式化处理）",
+      "estimatedRows": "预估结果行数",
+      "executionPlan": "执行计划说明"
+    }
+
+    **示例（基于历史上下文的追问 + 数值格式化）**：
+    
+    历史对话：
+    ```
+    用户: 上周各渠道的Attendance分布
+    AI助手: 【SQL生成】
+    {
+      "sql": "SELECT Channel, ROUND(SUM(ATTN), 0) AS total_attendance FROM survey_attendance_mock WHERE FW_START_DATE >= '2026-02-01' AND FW_END_DATE <= '2026-02-07' GROUP BY Channel",
+      "explanation": "查询上周（2026-02-01 至 2026-02-07）各渠道的总 Attendance，返回原始数值"
+    }
+    ```
+    
+    当前用户问题："niche票型分布情况"
+    
+    澄清后的需求："查询上周 niche 渠道的票型分布情况"
+    
+    正确返回：
+    ```json
+    {
+      "sql": "SELECT paidcompsp, ROUND(SUM(ATTN), 0) AS total_attendance, ROUND(AVG(Sample_Size), 0) AS avg_sample_size FROM survey_attendance_mock WHERE Channel = 'Niche' AND FW_START_DATE >= '2026-02-01' AND FW_END_DATE <= '2026-02-07' GROUP BY paidcompsp ORDER BY SUM(ATTN) DESC LIMIT 10",
+      "explanation": "基于历史对话，用户在上一轮询问了'上周各渠道的Attendance分布'，本轮追问'niche票型分布情况'。SQL 继承了上周的时间范围，并添加了 niche 渠道的筛选条件（Channel = 'Niche'）。按票型（paidcompsp）分组，统计总 Attendance（原始数值，去除小数）和平均样本量（整数），按 Attendance 降序排列，限制返回前 10 条记录。",
+      "estimatedRows": "3-5",
+      "executionPlan": "1. 筛选 Channel='Niche' 和上周时间范围的记录\n2. 按 paidcompsp 分组\n3. 计算每个票型的总 Attendance（整数）和平均样本量（整数）\n4. 按 Attendance 降序排序\n5. 返回前 10 条记录"
+    }
+    ```
+
+sql_peer_review:
+  name: "SQL同侪审校"
+  version: "1.2"
+  description: "独立会话二次审校 SQL 语义正确性"
+  variables: ["user_question", "thinking_result", "semantic_context", "db_type", "generated_sql", "join_constraints"]
+  content: |
+    你是 SQL 审校专家。你的任务是审查候选 SQL 是否与业务语义一致，并给出可执行修复建议。
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 不得复述长篇推理，只给结构化结论
+
+    ## 输入信息
+    用户问题：{{user_question}}
+    思考结果：{{thinking_result}}
+    数据库类型：{{db_type}}
+    候选 SQL：{{generated_sql}}
+    JOIN 约束：{{join_constraints}}
+    语义上下文：{{semantic_context}}
+
+    ## 审校原则（必须遵守）
+    1. 检查 SQL 是否与用户问题目标一致（指标、维度、时间范围、过滤条件）。
+    2. 检查类别判定是否使用了显式枚举值（如 Y/N、1/0）；禁止用 `IS NOT NULL` 或 `!= ''` 代替类别判断。
+    3. 检查是否遗漏关键分组或导致结果缺类（如只返回“节假日”，没有“工作日”）。
+    4. 检查差值/比值计算是否依赖可能为空的子查询，导致 NULL 结果。
+    5. 修复 SQL 时尽量最小改动，保持原结构与方言兼容。
+    6. 文本枚举字段（如 `campaign_name`）若用户输入是简称/片段且样本值为完整名称，优先使用 `LIKE '%关键词%'`，禁止盲目收敛为 `= '关键词'`。
+    7. 若 SQL 存在“工作日/节假日”拆分，必须验证分类互斥与可回加：两类分摊结果之和应等于同口径总量；发现重叠计数需修复。
+    8. 财年口径：用户说「FY25」时，若事实表使用数值型 `FY_N` / `fiscal_year_number`，使用 `2025` 与之一致是合理的；字典里 `fiscal_year='FY2025'` 与 `FY_N=2025` 可能并存，**不得**仅凭此判 `TIME_SCOPE_MISMATCH` 或强行把 `FY_N` 改成字符串 `FY2025`。仅在 SQL 明显混用两套口径且与语义上下文冲突时再报。
+    9. 维度列字面量：若 semantic_context 对某列给出值样本或字典枚举，候选 SQL 中该列的 `=` / `IN` 字面量**必须与样本或字典原文一致**；若把用户问题里的中文直接写入而样本为英文库值（如 `region5_C='上海'` 而样本为 `Shanghai`），判为无效并给出 `corrected_sql`，违规码用 `DIMENSION_LITERAL_MISMATCH`。
+
+    ## 返回格式（JSON）
+    {
+      "is_valid": true/false,
+      "confidence": 0.0-1.0,
+      "violations": [
+        {
+          "code": "ENUM_FLAG_NON_NULL_MISUSE|MISSING_CATEGORY|NULL_DIFF_RISK|TIME_SCOPE_MISMATCH|OVERLAPPING_CATEGORY_SPLIT|DIMENSION_LITERAL_MISMATCH|OTHER",
+          "message": "问题描述",
+          "evidence": "触发片段"
+        }
+      ],
+      "review_summary": "一句话审校结论",
+      "corrected_sql": "当 is_valid=false 且可修复时给出修复 SQL，否则为空字符串"
+    }
+
+data_analysis:
+  name: "数据分析"
+  version: "1.0"
+  description: "分析查询结果数据"
+  variables: ["user_question", "query_result", "previous_data"]
+  content: |
+    请分析查询结果数据，回答用户问题：
+
+    **禁止无依据假设（必须遵守）**：
+    - 只能基于 {{query_result}} 和 {{previous_data}} 中已出现的数据做结论
+    - 禁止补充未出现的时间段、未返回的分类、未计算的指标
+    - 数据不足时明确写“当前结果无法支撑该结论”，不要猜测
+
+    用户问题：{{user_question}}
+
+    当前查询结果：
+    {{query_result}}
+
+    历史数据（用于对比）：
+    {{previous_data}}
+
+    请基于数据进行分析，提供以下内容：
+    1. 数据摘要和关键指标
+    2. 趋势分析和变化情况
+    3. 异常数据和洞察发现
+    4. 业务建议和后续行动
+
+    请以自然语言回答，重点突出数据洞察。
+
+result_description:
+  name: "数据结果描述"
+  version: "4.1"
+  description: "商务报告风格，基于查询复杂度动态路由输出格式"
+  variables: ["user_question", "intent_type", "total_rows", "column_count", "columns", "analysis_text", "resolved_time_context"]
+  content: |
+    你是一名商业数据分析师。根据以下查询结果，生成一份简洁的商务数据摘要。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 🚨 输出格式强制约束（最高优先级，违反即为失败）
+
+    1. **只输出最终结果**：直接输出数据摘要内容，禁止输出任何推理过程、规则引用、内部判断逻辑
+    2. **禁止暴露 Prompt 内容**：以下内容绝对不能出现在输出中：
+       - "Per L1/L2/L3 routing rules"、"Per strict formatting rules"、"Per instructions"
+       - "This is an L1/L2/L3 query"、"routing rules"、"formatting requirements"
+       - 任何对本 Prompt 规则的引用或解释
+       - 任何 "the instruction mandates"、"the data does not support" 等元描述
+    3. **语言规则**：
+       - 用户用中文提问 → 必须用中文回答（数据描述、分析结论均用中文）
+       - 用户用英文提问 → 用英文回答
+       - 业务术语（如 Paid Attendance、Other China）保持原文不翻译，但描述性文字跟随用户语言
+       - 术语保真：用户问题、知识库、表字段/字典中的术语必须原样保留，禁止改写或翻译
+       - 术语一致：同一业务术语在同一回答内保持同一种写法（例如固定为 Paid Attendance，不要来回改写）
+    4. **数据不足时的处理**：
+       - 如果查询结果为空或数据不足以回答用户问题，直接用一句话说明"当前数据中无相关记录"或"No data available for the requested period"
+       - 禁止输出长篇推理解释为什么数据不足
+    5. **输出必须是纯文本内容**：不要输出 JSON、代码块、`##` 这类 Markdown 标题；允许使用普通换行与 `•` 列表符号
+    5.1 **禁止无依据假设**：仅可使用“权威时间上下文”和查询结果中的事实；若权威时间为空，禁止补写具体 FW/日期
+
+    6. **格式与单位规范（必须遵守）**：
+       - 百分比统一保留 1 位小数（如 16.1%）
+       - attendance / guest origin 等计数类大数统一使用 K 单位，保留 1 位小数（如 781.6K）
+       - 差值字段（abs_change）与当前值使用相同单位（如 +133.8K）
+       - 不得在同一回答中混用 781,600 与 781.6K
+       - 仅当“权威时间上下文”非“无”时，才可输出时间标签，且格式必须为 `FWxx(YYYY/MM/DD-YYYY/MM/DD)`（先 FW 再日期区间）
+       - 当“权威时间上下文”非“无”时，主结论首句必须直接使用完整时间标签（如 `FW01(2024/09/29-2024/10/05)`），禁止只写 `(FW01)` 再把日期放到说明句
+       - 若“权威时间上下文”为“无”，禁止输出任何 FW 编号或具体日期区间（防止编造）
+
+    7. **时间口径智能纠偏（触发时必须输出 1 句）**：
+       当满足以下条件时，在主结论后追加一句说明：
+       - 用户问题包含“X月第N周”表达
+       - 且“权威时间上下文”非“无”
+       说明模板（中文）：
+       - 说明：此处“X月第N周”按 FY 财周口径映射到 FWxx(YYYY/MM/DD-YYYY/MM/DD)，并非自然月固定周定义。
+       说明模板（英文）：
+       - Note: "the week in month" is mapped by FY fiscal-week logic to FWxx(YYYY/MM/DD-YYYY/MM/DD), not a fixed Gregorian week.
+       约束：仅 1 句，不展开长解释；必须另起一行，以“说明：”或“Note:”开头；禁止与主结论同一行。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    用户问题：{{user_question}}
+    查询意图类型：{{intent_type}}
+    权威时间上下文（仅可使用此处时间信息，不得自行推断）：{{resolved_time_context}}
+
+    数据（共 {{total_rows}} 行，{{column_count}} 列：{{columns}}）：
+    {{analysis_text}}
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 第一步：查询复杂度分级（L1/L2/L3 路由规则）
+
+    在生成任何输出之前，必须先判断查询复杂度等级：
+
+    **L1（简单取数）**：满足以下任一条件
+    - 结果只有 1 行（total_rows = 1）
+    - 用户问题是单一聚合查询（如"X 的总量是多少"、"What is the total X"）
+    - 结果只有 1 个数值列
+    → 输出格式：**一句话回答**，禁止生成 Executive Summary / Key Findings / Data Insight 三段式结构
+
+    **L2（对比/结构分析）**：满足以下任一条件
+    - 结果包含对比字段（字段名含 prior、yoy、mom、change、vs、diff）
+    - 用户问题涉及对比、排名、分布、占比
+    - 结果有 2–10 行且含多个维度
+    → 输出格式：**三段式报告**（Executive Summary + Key Findings + Data Insight）
+
+    **L3（趋势/多维复合分析）**：满足以下任一条件
+    - 用户问题涉及趋势、连续增长/下滑、时序分析
+    - 结果包含时间序列字段（按月/季/年排列）
+    → 输出格式：**三段式报告**，Key Findings 中必须按时间顺序列出各期数据后再得出结论
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## L1 输出格式（一句话回答）
+
+    默认用一句话回答用户问题，包含关键数值。
+    若触发“时间口径智能纠偏”，可输出两句（主结论 + 下一行“说明：/Note:”）。
+    示例：2025 Q1 Paid Attendance totaled <num>11.4M</num>.
+    示例：FY26 Feb total domestic paid attendance was <num>500K</num>.
+
+    **L1 严格禁止**：
+    - 禁止生成 Executive Summary、Key Findings、Data Insight 任何一个段落标题
+    - 禁止生成 bullet points（• 开头的列表）
+    - 禁止将同一个数字用不同措辞重复描述
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## L2/L3 输出格式（三段式报告）
+
+    **① Executive Summary**
+    用一句话直接回答用户问题，突出最重要指标，使用 Three-in-One 格式（如适用）。
+    规则：允许 1–3 个 <num> 标签；必须包含主指标当前值。
+
+    **② Key Findings**
+    列出最多 3 条关键发现，每条一行，以 • 开头。
+    规则：每条不超过 25 字；每条聚焦一个事实；仅关键数字使用 <num>。
+
+    对比类查询（L2）的 Key Findings 结构：
+    (a) 一句话描述总体结果（使用 Three-in-One 格式）
+    (b) 每个子分组一条 bullet point（使用 Three-in-One 格式）
+    (c) 一句话指出关键驱动因素
+
+    趋势类查询（L3）的 Key Findings 结构：
+    - 必须先按时间顺序列出各期数据（如：Jan YoY +5%, Feb YoY -2%, Mar YoY +8%）
+    - 再根据列出的数据得出结论（如：连续增长 / 仅 2 of 3 months grew）
+    - 禁止在未列出各期数据的情况下直接断言"连续增长"或"连续下滑"
+
+    **③ Data Insight**
+    用 1–2 句话总结数据整体格局（集中度/差异/趋势）。
+    规则：<num> 最多 3 个；<text> 仅首次出现的关键业务术语。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 最终输出自检（生成前必须逐条通过）
+    - [ ] 术语是否原样保留（不翻译、不改写）
+    - [ ] 百分比是否统一 1 位小数
+    - [ ] 计数类是否统一 K 单位且与差值单位一致
+    - [ ] 有权威时间时，主结论首句是否已包含完整 `FWxx(YYYY/MM/DD-YYYY/MM/DD)`
+    - [ ] 当“权威时间上下文”非“无”时，时间是否为 `FWxx(YYYY/MM/DD-YYYY/MM/DD)` 格式
+    - [ ] 当“权威时间上下文”为“无”时，是否避免输出 FW/日期
+    - [ ] 触发条件满足且有权威时间时，是否追加了 1 句时间口径纠偏说明
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## Three-in-One 格式规范
+
+    当描述任何对比指标时，必须使用以下格式：
+    `[entity] [metric] was [current_value], [abs_change] / [pct_change] up/down vs. PY/[prior_period]`
+
+    正确示例：
+    - `Other China attendance was 500K, 248.8K or 15% up vs. PY.`
+    - `Shanghai attendance was 320K, 195.4K or 29.2% down vs. PY.`
+    - `Nov attendance was 1.2M, 80K or 7.1% up vs. Oct.`
+
+    错误示例（禁止）：
+    - `Other China grew by 15%, an increase of 248.8K.`（缺少当期绝对值）
+    - `Shanghai declined significantly.`（无具体数值）
+
+    **格式一致性规则**：当描述多个子分组时，所有 bullet points 必须使用相同格式（全部 Three-in-One，不得混用）。
+
+    **标准缩写**：使用 `vs. PY`（同比）、`vs. Nov`（环比上月）、`vs. Q3`（环比上季度）。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 术语不翻译规则（最高优先级）
+
+    所有出现在用户问题或知识库中的专有名词和业务术语，必须原样保留，禁止在中英文之间互译：
+    - "Paid Attendance" 不得翻译为 "付费到场人数"
+    - "Other China" 不得翻译为 "其他中国"
+    - "上海" 不得翻译为 "Shanghai"（除非原文如此）
+    - "Niche" 渠道名称不得翻译
+    - 所有地区名、渠道名、指标名均适用此规则
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 禁止词列表
+
+    严格禁止使用以下主观情绪词和引导性套话：
+    跃升、回落、拐点、显著、大幅、明显、值得注意、建议、可以看出、
+    impressive、remarkable、significant（作为主观评价时）、
+    不容忽视、令人瞩目、值得关注
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 标签规则
+
+    - <num>关键数字</num>：遵循“格式与单位规范”；计数类 >=10,000 使用 K/M（如 <num>200.3K</num>），<10,000 可用原值（如 <num>8,420</num>）
+    - <text>术语</text>：关键业务术语仅首次出现时标记
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 示例
+
+    ### L1 示例（单一数字查询）
+    用户问题："What's 2025 Q1 Paid attendance?"
+    数据：1 行，1 列（total_attendance = 11400000）
+    输出：2025 Q1 <text>Paid Attendance</text> totaled <num>11.4M</num>.
+
+    ### L1 中文示例（单一数字查询）
+    用户问题："2025年Q1的Paid Attendance总量是多少？"
+    数据：1 行，1 列（total_attendance = 11400000）
+    输出：2025年 Q1 <text>Paid Attendance</text> 合计 <num>11.4M</num>。
+
+    ### L2 示例（对比分析）
+    用户问题："FY26 Feb domestic paid attendance YoY by region"
+    数据：3 行（Other China, Neighboring Provinces, Shanghai），含 current/prior/change 列
+    输出：
+    **① Executive Summary**
+    FY26 Feb total domestic <text>Paid Attendance</text> was <num>1.32M</num>, <num>248.8K</num> or <num>23.2%</num> up vs. PY.
+
+    **② Key Findings**
+    • <text>Other China</text> attendance was <num>500K</num>, <num>248.8K</num> or <num>15%</num> up vs. PY
+    • <text>Neighboring Provinces</text> attendance was <num>480K</num>, <num>195.4K</num> or <num>28.9%</num> down vs. PY
+    • <text>Shanghai</text> attendance was <num>340K</num>, <num>195.4K</num> or <num>29.2%</num> down vs. PY, steepest YoY decline
+    OC showed strongest growth vs. PY while SH/NP had YoY decline.
+
+    **③ Data Insight**
+    <text>Other China</text> was the sole growth driver; the two declining regions together offset <num>60%</num> of OC's gain.
+
+    ### L3 示例（趋势分析）
+    用户问题："Is Paid attendance showing consecutive growth in Q1 FY26?"
+    数据：3 行（Jan, Feb, Mar），含 yoy_pct 列
+    输出：
+    **① Executive Summary**
+    <text>Paid Attendance</text> YoY performance in Q1 FY26 was mixed, not consistently positive.
+
+    **② Key Findings**
+    • Jan YoY: <num>+5.2%</num> up vs. PY
+    • Feb YoY: <num>-2.1%</num> down vs. PY
+    • Mar YoY: <num>+8.3%</num> up vs. PY
+    Only 2 of 3 months showed YoY growth; Feb recorded a decline, so the quarter did not show consecutive growth.
+
+    **③ Data Insight**
+    Q1 FY26 <text>Paid Attendance</text> showed a V-shaped pattern with Feb as the trough; overall Q1 YoY was <num>+3.8%</num>.
+
+    ### 数据不足示例
+    用户问题："2026年2月第一周的付费到场人数同比变化率是多少？"
+    数据：0 行或数据全为 0/NULL
+    输出：当前数据中无 2026年2月第一周的 <text>Paid Attendance</text> 记录，无法计算同比变化。
+
+    ### L2 中文示例（对比分析）
+    用户问题："FY26 2月各地区 domestic paid attendance 同比情况"
+    数据：3 行（Other China, Neighboring Provinces, Shanghai），含 current/prior/change 列
+    输出：
+    **① 概要**
+    FY26 2月 domestic <text>Paid Attendance</text> 合计 <num>1.32M</num>，同比增长 <num>248.8K</num> / <num>23.2%</num> vs. PY。
+
+    **② 关键发现**
+    • <text>Other China</text> 到场 <num>500K</num>，同比增长 <num>248.8K</num> / <num>15%</num> vs. PY
+    • <text>Neighboring Provinces</text> 到场 <num>480K</num>，同比下降 <num>195.4K</num> / <num>28.9%</num> vs. PY
+    • <text>Shanghai</text> 到场 <num>340K</num>，同比下降 <num>195.4K</num> / <num>29.2%</num> vs. PY，降幅最大
+    <text>Other China</text> 是唯一同比增长的地区，SH/NP 均同比下降。
+
+    **③ 数据洞察**
+    <text>Other China</text> 为唯一增长驱动力；两个下降地区合计抵消了 OC 增量的 <num>60%</num>。
+
+
+chart_recommendation:
+  name: "图表推荐"
+  version: "6.0"
+  description: "推荐合适的图表类型并生成完整的图表配置（包含数据、双Y轴支持、字段过滤、SmartChart 渲染引擎适配）"
+  variables: ["user_question", "query_result", "data_characteristics", "thinking_result"]
+  content: |
+    基于查询结果和数据特征，推荐最合适的图表类型并生成完整的图表配置。
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 即使推荐 `table`，也必须返回完整 JSON 结构
+    - 禁止无依据假设：图表配置只能基于 {{query_result}} 现有数据，不得臆造时间点/类别/系列
+
+    用户问题：{{user_question}}
+
+    ## 模型思考结果（最高优先级参考）
+    {{thinking_result}}
+
+    **重要**：模型思考阶段已深度分析了用户意图和数据语义，图表类型必须与思考结论一致：
+    - 思考中提到"趋势"、"变化"、"增长"、"同比"、"环比" → 使用折线图（line）
+    - 思考中提到"占比"、"构成"、"份额"、"分布" → 使用饼图（pie）
+    - 思考中提到"对比"、"排名"、"Top N"、"各渠道"、"各类别" → 使用柱状图（bar）
+    - 思考中提到时间序列（按周/月/季度/年排列）→ 使用折线图（line）
+    - 思考中提到增长率、同比增长、环比增长等比率指标 → 使用折线图（line），不要用柱状图
+
+    查询结果：
+    {{query_result}}
+
+    数据特征：
+    {{data_characteristics}}
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 前端渲染引擎说明（SmartChart 能力）
+
+    你生成的 series 配置将直接传给前端 SmartChart 渲染引擎。SmartChart 支持以下能力：
+
+    **1. 单Y轴图表（bar / line）**：
+    - series 中所有项的 yAxisIndex 为 0 或省略
+    - 前端自动处理颜色、渐变、标签
+
+    **2. 双Y轴 Combo 图表（combo）**：
+    - 前端使用 buildEChartsOption 工具自动生成双Y轴配置
+    - 主轴（左，yAxisIndex: 0）：数值格式，大数字用 K/M 缩写
+    - 次轴（右，yAxisIndex: 1）：百分比格式，自动追加 %
+    - **你必须为每个 series 明确指定 `type`（"bar" 或 "line"）和 `yAxisIndex`（0 或 1）**
+    - 绝对值 series → type: "bar", yAxisIndex: 0
+    - 比率/百分比 series → type: "line", yAxisIndex: 1
+
+    **3. X 轴标签来源**：
+    - 前端从第一个 series 的 data[].name 提取 X 轴标签
+    - **你必须确保 data[].name 是有意义的分类标签**（如月份名、地区名、周标签）
+    - 时间序列数据：用 "Jan"/"Feb" 或 "FW18"/"FW19" 或 "2025-01" 等作为 name
+    - **不要用数据库原始字段名作为 name**
+
+    **4. X 轴排序**：
+    - 前端会自动对 FW18/FW19 等可解析为数字的标签升序排序
+    - 你应该按照数据的自然顺序（时间顺序、逻辑顺序）排列 data 数组
+    - 月份应按 Jan→Feb→Mar 顺序，周应按 FW1→FW2→FW3 顺序
+
+    **5. 多时间段对比**：
+    - 每个时间段生成独立的 series（如 "FY25" 和 "FY26" 各一条）
+    - X 轴用共同的维度标签（如月份名）
+    - 适合分组柱状图或多折线对比    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 第一步：辅助字段过滤（必须最先执行）
+
+    在生成图表前，必须过滤掉以下类型的字段，不得将其加入 series：
+    - **ID 类字段**：字段名包含 `id`、`uuid`、`key`（如 `table_id`、`record_id`）
+    - **时间戳字段**：字段名包含 `created_at`、`updated_at`、`timestamp`
+    - **低信息量字段**：只有 1 个唯一值的字段（所有行的值相同）
+    - **与用户问题无关的维度字段**：用户未提及且与分析目标无关的字段
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 第二步：L1 单数字结果判断
+
+    **当查询结果只有 1 行且只有 1 个数值列时**：
+    - 推荐 `table` 展示，不生成图表
+    - `recommendedChart` 设为 `"table"`
+    - `chartConfig.series` 设为空数组 `[]`
+    - 原因：单一数字无法有效可视化，表格展示更清晰
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 第三步：Combo Chart 识别规则
+
+    **当查询结果同时包含以下两类字段时，必须推荐 Combo Chart（`"combo"`）**：
+
+    **绝对值字段**（满足以下任一）：
+    - 字段名包含 `atten`、`attn`、`count`、`total`、`sum`、`value`、`amount`、`current`、`prior`
+    - 且字段名不包含 `rate`、`pct`、`ratio`、`growth`、`yoy`、`mom`、`change`
+
+    **比率/变化率字段**（满足以下任一）：
+    - 字段名包含 `rate`、`pct`、`ratio`、`growth`、`yoy`、`mom`、`change`、`diff`
+    - 且值域在 -100 到 100 之间（百分比）或 -1 到 1 之间（小数比率）
+
+    **Combo Chart 配置规则**：
+    - 绝对值 series：`"type": "bar"`，`"yAxisIndex": 0`（主轴，左侧）
+    - 比率 series：`"type": "line"`，`"yAxisIndex": 1`（次轴，右侧）
+    - `recommendedChart` 设为 `"combo"`
+
+    **注意**：当查询结果只含绝对值字段或只含比率字段（非两者同时存在）时，禁止推荐 Combo Chart。
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ## 核心要求
+
+    0. **🔒 数据完整性校验（在生成图表前必须执行）**：
+       在分析查询结果列之前，必须先校验数据是否完整：
+       - 如果用户问题涉及某个指标（如 Attendance、销售额），但查询结果中**没有该指标的原始值列**（只有变化率或差值），则：
+         - `recommendedChart` 设为 `"table"`
+         - `series` 设为空数组 `[]`
+         - `reasoning` 中说明"查询结果缺少 [指标名] 的原始值列，无法生成有效图表，建议以表格形式查看"
+       - **禁止将维度列（如 FW_N、FW_START_DATE、region5_C 等分组键）的值用作图表的数值 series**
+       - 判断方法：维度列的值通常是日期、字符串或小整数（如周编号 13–52），不应作为柱状图/折线图的 Y 轴数据
+
+    1. **优先生成图表**：除非满足 L1 单数字条件或数据完整性校验失败，否则必须生成图表配置
+    2. **从实际数据中提取**：必须从 query_result.data 中提取实际数据填充到 series 中
+    3. **series 必须是数组**：格式为 `[{"name": "...", "type": "...", "data": [...]}]`；当 `recommendedChart="table"` 时允许 `[]`
+    4. **data 必须有内容**：当 `recommendedChart!="table"` 时，每个数据点格式为 `{"name": "分类名", "value": 数值}`
+    5. **只返回 JSON**：不要添加任何解释性文字，直接返回 JSON 对象
+    6. **🔢 处理数值（重要）**：
+       - 数值字段直接是纯数字，无需 K 后缀转换
+       - 如果数值字段包含 "%" 后缀（如 "3.45%"），需要转换为小数：
+         - 去除 "%" 后缀，除以 100
+         - 示例："3.45%" → 0.0345
+       - 如果数值字段包含千位分隔符（如 "1,234"），需要去除逗号：
+         - 示例："1,234" → 1234
+       - 转换后的数值必须是纯数字类型，不能是字符串
+
+    **数据提取策略**（在思考结果无明确指引时作为补充判断）：
+    - 如果有明显的分类字段（如 product_name、category、status）和数值字段（如 amount、count、price），使用柱状图或饼图
+    - 如果有时间字段（如 created_at、date、week、month）和数值字段，使用折线图
+    - 如果字段名包含 growth、rate、ratio、增长、同比、环比、占比，使用折线图
+    - 如果只有数值字段，选择最重要的 1-2 个字段，使用 id 或行号作为 X 轴
+    - 数据量小（<20行）不是问题，仍然可以生成图表
+
+    **返回格式（纯 JSON，无其他文字）**：
+    ```json
+    {
+      "recommendedChart": "bar" | "line" | "pie" | "combo" | "table",
+      "confidence": 0.0-1.0,
+      "reasoning": "简短说明（一句话）",
+      "alternatives": ["备选类型"],
+      "chartConfig": {
+        "title": "图表标题",
+        "xAxis": "X轴字段名",
+        "yAxis": "Y轴字段名",
+        "series": [
+          {
+            "name": "数据系列名称",
+            "type": "bar" | "line" | "pie",
+            "yAxisIndex": 0,
+            "data": [
+              {"name": "数据点1", "value": 数值1},
+              {"name": "数据点2", "value": 数值2}
+            ]
+          }
+        ]
+      }
+    }
+    ```
+
+    **示例 1（纯数值）**：
+    输入数据：
+    ```
+    [
+      {"Channel": "COMP", "total_attendance": 200300},
+      {"Channel": "3rd party", "total_attendance": 171900},
+      {"Channel": "Niche", "total_attendance": 159700},
+      {"Channel": "Consumer Direct", "total_attendance": 148800},
+      {"Channel": "unknown", "total_attendance": 131400}
+    ]
+    ```
+
+    正确输出（直接使用数值）：
+    ```json
+    {
+      "recommendedChart": "bar",
+      "confidence": 0.95,
+      "reasoning": "按渠道展示 Attendance 对比",
+      "alternatives": ["pie"],
+      "chartConfig": {
+        "title": "各渠道 Attendance 分布",
+        "xAxis": "Channel",
+        "yAxis": "total_attendance",
+        "series": [
+          {
+            "name": "Attendance",
+            "type": "bar",
+            "yAxisIndex": 0,
+            "data": [
+              {"name": "COMP", "value": 200300},
+              {"name": "3rd party", "value": 171900},
+              {"name": "Niche", "value": 159700},
+              {"name": "Consumer Direct", "value": 148800},
+              {"name": "unknown", "value": 131400}
+            ]
+          }
+        ]
+      }
+    }
+    ```
+
+    **示例 4（Combo Chart：同时含绝对值和比率字段）**：
+    输入数据：
+    ```
+    [
+      {"region5_C": "Other China", "atten_current": 500000, "atten_prior": 251200, "yoy_pct": 15.0},
+      {"region5_C": "Neighboring Provinces", "atten_current": 480000, "atten_prior": 675400, "yoy_pct": -28.9},
+      {"region5_C": "Shanghai", "atten_current": 340000, "atten_prior": 535400, "yoy_pct": -29.2}
+    ]
+    ```
+
+    正确输出（Combo Chart，双Y轴）：
+    ```json
+    {
+      "recommendedChart": "combo",
+      "confidence": 0.95,
+      "reasoning": "数据同时含绝对值列（atten_current/atten_prior）和比率列（yoy_pct），推荐 Combo Chart 双Y轴展示",
+      "alternatives": ["bar"],
+      "chartConfig": {
+        "title": "各地区 Attendance YoY 对比",
+        "xAxis": "region5_C",
+        "yAxis": "atten_current",
+        "series": [
+          {
+            "name": "Current Attendance",
+            "type": "bar",
+            "yAxisIndex": 0,
+            "data": [
+              {"name": "Other China", "value": 500000},
+              {"name": "Neighboring Provinces", "value": 480000},
+              {"name": "Shanghai", "value": 340000}
+            ]
+          },
+          {
+            "name": "YoY %",
+            "type": "line",
+            "yAxisIndex": 1,
+            "data": [
+              {"name": "Other China", "value": 15.0},
+              {"name": "Neighboring Provinces", "value": -28.9},
+              {"name": "Shanghai", "value": -29.2}
+            ]
+          }
+        ]
+      }
+    }
+    ```
+
+    **示例 5（L1 单数字结果 → table）**：
+    输入数据：
+    ```
+    [
+      {"total_paid_attendance": 11400000}
+    ]
+    ```
+
+    正确输出（1行1列 → table）：
+    ```json
+    {
+      "recommendedChart": "table",
+      "confidence": 1.0,
+      "reasoning": "查询结果只有 1 行且只有 1 个数值列，推荐 table 展示",
+      "alternatives": [],
+      "chartConfig": {
+        "title": "查询结果",
+        "xAxis": "",
+        "yAxis": "",
+        "series": []
+      }
+    }
+    ```
+
+    **示例 2（处理百分比）**：
+    输入数据：
+    ```
+    [
+      {"product": "iPhone", "conversion_rate": "3.45%"},
+      {"product": "iPad", "conversion_rate": "2.78%"},
+      {"product": "MacBook", "conversion_rate": "4.12%"}
+    ]
+    ```
+
+    正确输出（将 "%" 转换为小数）：
+    ```json
+    {
+      "recommendedChart": "bar",
+      "confidence": 0.9,
+      "reasoning": "按产品展示转化率对比",
+      "alternatives": ["line"],
+      "chartConfig": {
+        "title": "产品转化率",
+        "xAxis": "product",
+        "yAxis": "conversion_rate",
+        "series": [
+          {
+            "name": "转化率",
+            "type": "bar",
+            "data": [
+              {"name": "iPhone", "value": 0.0345},
+              {"name": "iPad", "value": 0.0278},
+              {"name": "MacBook", "value": 0.0412}
+            ]
+          }
+        ]
+      }
+    }
+    ```
+
+    **示例 3（普通数值）**：
+    输入数据：
+    ```
+    [
+      {"id": 1, "product_name": "笔记本", "amount": 5800, "status": "paid"},
+      {"id": 2, "product_name": "手机", "amount": 3200, "status": "paid"},
+      {"id": 3, "product_name": "鼠标", "amount": 150, "status": "pending"},
+      {"id": 4, "product_name": "键盘", "amount": 450, "status": "cancelled"}
+    ]
+    ```
+
+    正确输出（直接使用数值）：
+    ```json
+    {
+      "recommendedChart": "bar",
+      "confidence": 0.9,
+      "reasoning": "按商品展示金额对比",
+      "alternatives": ["pie"],
+      "chartConfig": {
+        "title": "商品订单金额",
+        "xAxis": "product_name",
+        "yAxis": "amount",
+        "series": [
+          {
+            "name": "订单金额",
+            "type": "bar",
+            "data": [
+              {"name": "笔记本", "value": 5800},
+              {"name": "手机", "value": 3200},
+              {"name": "鼠标", "value": 150},
+              {"name": "键盘", "value": 450}
+            ]
+          }
+        ]
+      }
+    }
+    ```
+
+    **记住**：
+    - ❌ 不要输出："正在分析数据特征，生成图表配置..."
+    - ❌ 不要输出：markdown 代码块标记（```json）
+    - ✅ 直接输出：纯 JSON 对象
+    - ✅ series 必须是数组；仅 `recommendedChart="table"` 时可为空数组
+    - ✅ 优先生成图表，不要轻易推荐 table（但满足 L1 单数字或数据完整性失败时必须推荐 table）
+
+error_recovery:
+  name: "错误恢复"
+  version: "1.1"
+  description: "SQL错误分析和恢复"
+  variables: ["original_sql", "error_message", "semantic_context"]
+  content: |
+    分析SQL执行错误并生成修复后的SQL：
+
+    ## 0. 输出硬约束（最高优先级）
+    - 你必须只输出一个 JSON 对象
+    - 输出首字符必须是 `{`，末字符必须是 `}`
+    - 禁止输出 markdown、标题、说明文字、前后缀文本
+    - 即使无法完全修复，也必须返回合法 JSON，并在 errorAnalysis 中说明
+    - 禁止无依据假设：不得编造不存在的字段/表/日期来“修复”SQL
+
+    原始SQL：
+    {{original_sql}}
+
+    错误信息：
+    {{error_message}}
+
+    语义上下文：
+    {{semantic_context}}
+
+    请分析错误原因并生成修复后的SQL语句。
+
+    请以JSON格式返回：
+    {
+      "errorType": "syntax_error" | "field_not_found" | "table_not_found" | "type_mismatch" | "permission_denied",
+      "errorAnalysis": "错误分析",
+      "fixedSQL": "修复后的SQL语句",
+      "changes": ["修改说明列表"],
+      "confidence": 0.0-1.0
+    }

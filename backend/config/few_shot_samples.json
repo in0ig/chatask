@@ -1,0 +1,21 @@
+{
+  "sql_generation": [
+    {
+      "input": "查询所有用户的姓名和邮箱",
+      "output": "SELECT name, email FROM users;",
+      "score": 1.0
+    },
+    {
+      "input": "统计每个部门的员工数量",
+      "output": "SELECT department, COUNT(*) as employee_count FROM employees GROUP BY department;",
+      "score": 1.0
+    }
+  ],
+  "intent_recognition": [
+    {
+      "input": "显示销售额最高的产品",
+      "output": "{\"intent\": \"query\", \"confidence\": 0.9, \"reasoning\": \"用户想要查询具体的销售数据\"}",
+      "score": 1.0
+    }
+  ]
+}

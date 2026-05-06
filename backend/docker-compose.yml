@@ -1,0 +1,153 @@
+# ChatBI 后端服务 Docker Compose 配置
+# 用于开发和测试环境
+# 生产环境建议使用 Kubernetes 或其他编排工具
+
+version: '3.8'
+
+services:
+  # 后端服务
+  chatbi-backend:
+    build: .
+    container_name: chatbi-backend
+    ports:
+      - "8000:8000"
+    environment:
+      ODBC_DRIVER: ${ODBC_DRIVER:-ODBC Driver 18 for SQL Server}
+      ODBC_ENCRYPT: ${ODBC_ENCRYPT:-yes}
+      ODBC_TRUST_SERVER_CERTIFICATE: ${ODBC_TRUST_SERVER_CERTIFICATE:-no}
+      ODBC_HOSTNAME_IN_CERTIFICATE: ${ODBC_HOSTNAME_IN_CERTIFICATE:-}
+      # 容器内通过服务名访问 MySQL，避免受本机 .env 覆盖影响
+      DB_HOST: mysql
+      DB_PORT: 3306
+      CHATBI_DATASOURCE_LOCALHOST_REMAP: mysql
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./logs:/var/log/chatbi
+      - ./public/uploads:/var/www/chatbi/uploads
+      - ./backend.log:/app/backend.log
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chatbi-network
+
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: chatbi-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-12345678}
+      MYSQL_DATABASE: ${DB_NAME:-chatbi}
+      MYSQL_USER: ${DB_USER:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-12345678}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./alembic/versions:/docker-entrypoint-initdb.d/versions
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-12345678}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - chatbi-network
+
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: chatbi-redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - chatbi-network
+
+  # 数据库迁移工具（可选）
+  alembic-migrate:
+    build: .
+    container_name: chatbi-alembic-migrate
+    command: alembic upgrade head
+    env_file:
+      - .env
+    depends_on:
+      - mysql
+    networks:
+      - chatbi-network
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  chatbi-network:
+    driver: bridge
+
+# ==================== 部署说明 ====================
+# 开发环境使用：
+#   docker-compose up -d
+#   docker-compose logs -f chatbi-backend
+#
+# 生产环境建议：
+#   1. 使用 .env 文件管理生产环境变量
+#   2. 移除 volumes 挂载（使用构建好的镜像）
+#   3. 使用 nginx 作为反向代理
+#   4. 配置 SSL 证书
+#   5. 使用监控和日志收集工具
+#
+# 数据库初始化：
+#   - init.sql 文件包含基础表结构
+#   - alembic 版本脚本用于数据库迁移
+#
+# 停止服务：
+#   docker-compose down
+#
+# 查看容器状态：
+#   docker-compose ps
+#
+# 运行数据库迁移：
+#   docker-compose run --rm alembic-migrate
+#
+# 进入容器调试：
+#   docker exec -it chatbi-backend bash
+#
+# 查看日志：
+#   docker-compose logs chatbi-backend
+#
+# 重建镜像：
+#   docker-compose build --no-cache
+#
+# 重启服务：
+#   docker-compose restart
+#
+# 重要安全提示：
+#   - 生产环境不要暴露数据库端口到公网
+#   - 使用强密码
+#   - 定期备份数据库
+#   - 使用网络隔离
+#   - 启用防火墙

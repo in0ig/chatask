@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"name": "ChatBI",
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"kiroAgent.configureMCP": "Enabled"
+	}
+}

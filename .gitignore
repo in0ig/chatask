@@ -1,0 +1,66 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# 测试 & 覆盖率
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+*.coveragerc
+coverage.xml
+nosetests.xml
+
+# 日志 & 数据库
+*.log
+*.db
+*.sqlite3
+
+# mypy / pyright
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+
+# ===========================
+# Node / Frontend
+# ===========================
+node_modules/
+dist/
+dist-ssr/
+.output/
+
+
+# Vite 缓存
+.vite/
+*.tsbuildinfo
+
+# 编辑器
+.DS_Store
+Thumbs.db
+
+# ===========================
+# 项目特定
+# ===========================
+# 验证截图 & 临时报告
+verification_*.png
+*_REPORT.md
+*_GUIDE.md
+*_SUMMARY.md
+*_COMPLETION.md

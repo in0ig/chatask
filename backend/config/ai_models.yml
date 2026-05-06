@@ -1,0 +1,113 @@
+# AI模型配置文件
+# 支持云端Qwen模型和本地OpenAI模型
+
+# 云端Qwen模型配置
+qwen_cloud:
+  api_key: "${DASHSCOPE_API_KEY:-sk-399d0eb35c494883afdc3ca41e2ce214}"  # 从环境变量获取
+  base_url: "${ALIYUN_API_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
+  model_name: "${DASHSCOPE_MODEL:-qwen-plus}"
+  max_tokens: 2000
+  temperature: 0.1  # 较低的温度确保SQL生成的一致性
+  retry_count: 3
+  retry_delay: 1.0
+  
+  # Token使用量监控配置
+  cost_tracking:
+    enabled: true
+    cost_per_1k_tokens: 0.002  # $0.002 per 1K tokens
+    daily_limit_tokens: 100000  # 每日Token使用限制
+    alert_threshold: 0.8  # 达到80%时发出警告
+
+# 本地OpenAI模型配置（内网 Qwen3.5 模型）
+openai_local:
+  api_key: "${OPENAI_LOCAL_API_KEY:-none}"
+  base_url: "${OPENAI_LOCAL_BASE_URL:-http://10.136.49.200:11539/v1}"
+  model_name: "${OPENAI_LOCAL_MODEL:-Qwen3.5-35B-A3B}"
+  # max_tokens 不设置，让模型自行决定输出长度
+  temperature: 0.7
+  # Qwen3 思考模型：设为 false 禁用 thinking 模式，直接输出最终答案
+  # 设为 true 则启用思考（输出会更慢，reasoning_content 不会出现在响应中）
+  enable_thinking: false
+  retry_count: 2
+  retry_delay: 0.5
+  
+  # 性能优化配置
+  performance:
+    max_concurrent_requests: 5
+    request_timeout: 60
+    keep_alive: true
+  
+  # 数据隐私保护配置
+  privacy:
+    network_isolation_check: true  # 内网模型，数据不出网
+    audit_logging: true  # 审计日志
+    data_retention_days: 0  # 不保留数据
+
+# 模型选择策略（每个阶段可独立配置使用 cloud 或 local 模型）
+# 可选值: "cloud"（云端 Qwen）, "local"（本地 OpenAI/Qwen）
+model_routing:
+  # 默认模型：当某阶段未单独配置时使用此值
+  default: "local"
+  
+  # 各阶段独立配置（取消注释可覆盖 default）
+  stages:
+    intent_recognition: "local"      # 意图识别
+    table_selection: "local"         # 智能选表
+    intent_clarification: "local"    # 意图澄清
+    thinking: "local"                # 模型思考
+    sql_generation: "local"          # SQL 生成
+    chart_recommendation: "local"    # 图表推荐
+    result_description: "local"      # 数据结果描述
+    data_analysis: "local"           # 数据分析
+    error_recovery: "local"          # 错误恢复
+    summary: "local"                 # 摘要生成
+
+# 数据安全配置
+security:
+  # 云端模型数据清洗规则
+  cloud_data_sanitization:
+    enabled: true
+    # 禁止发送的数据模式
+    blocked_patterns:
+      - "\\b\\d{4}-\\d{2}-\\d{2}\\b"  # 日期格式
+      - "\\b\\d+\\.\\d+\\b"  # 数值
+      - "'[^']*'"  # 字符串值
+      - '"[^"]*"'  # 双引号字符串值
+      - "\\b\\d{11,}\\b"  # 长数字（可能是ID或手机号）
+    
+    # 允许的元数据类型
+    allowed_metadata:
+      - "table_names"
+      - "column_names"
+      - "data_types"
+      - "constraints"
+      - "relationships"
+  
+  # 本地模型数据处理
+  local_data_processing:
+    enabled: true
+    # 确保数据不出网的检查
+    network_isolation_check: true
+    # 数据处理日志
+    audit_logging: true
+
+# 监控和日志配置
+monitoring:
+  # 性能监控
+  performance_metrics:
+    enabled: true
+    response_time_threshold: 10.0  # 秒
+    error_rate_threshold: 0.05  # 5%
+  
+  # Token使用量监控
+  token_usage_monitoring:
+    enabled: true
+    daily_report: true
+    cost_alerts: true
+  
+  # 日志配置
+  logging:
+    level: "INFO"
+    include_prompts: false  # 不记录完整prompt以保护隐私
+    include_responses: false  # 不记录完整响应以保护隐私
+    include_metadata: true  # 记录元数据用于监控

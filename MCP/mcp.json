@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "chrome-debug": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ],
+      "env": {
+        "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+      },
+      "autoApprove": [
+        "puppeteer_navigate"
+      ]
+    },
+    
+    "firefox-debug": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer",
+        "--browser",
+        "firefox"
+      ],
+      "env": {
+        "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+      },
+      "autoApprove": [
+        "puppeteer_navigate"
+      ]
+    }
+  }
+}

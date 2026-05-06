@@ -1,0 +1,296 @@
+{
+  "versions": {
+    "test_template": [
+      {
+        "version_id": "test_template_1770257984_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-02-05T10:19:44.248275",
+        "created_by": "test_user",
+        "description": "测试模板",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-02-05T10:19:44.248282"
+        }
+      },
+      {
+        "version_id": "test_template_1770720226_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-02-10T18:43:46.017143",
+        "created_by": "test_user",
+        "description": "测试模板",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-02-10T18:43:46.017168"
+        }
+      },
+      {
+        "version_id": "test_template_1770720226_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-02-10T18:43:46.043088",
+        "created_by": "system",
+        "description": "",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-02-10T18:43:46.043099"
+        }
+      },
+      {
+        "version_id": "test_template_1772440883_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-03-02T16:41:23.119152",
+        "created_by": "test_user",
+        "description": "测试模板",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-03-02T16:41:23.119168"
+        }
+      },
+      {
+        "version_id": "test_template_1772440883_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-03-02T16:41:23.131395",
+        "created_by": "system",
+        "description": "",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-03-02T16:41:23.131403"
+        }
+      },
+      {
+        "version_id": "test_template_1772441041_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-03-02T16:44:01.037874",
+        "created_by": "test_user",
+        "description": "测试模板",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-03-02T16:44:01.037909"
+        }
+      },
+      {
+        "version_id": "test_template_1772441041_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-03-02T16:44:01.066940",
+        "created_by": "system",
+        "description": "",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-03-02T16:44:01.066949"
+        }
+      },
+      {
+        "version_id": "test_template_1773803201_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-03-18T11:06:41.764088",
+        "created_by": "test_user",
+        "description": "测试模板",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-03-18T11:06:41.764116"
+        }
+      },
+      {
+        "version_id": "test_template_1773803201_9dc11a76",
+        "name": "test_template",
+        "content": "Hello {{name}}!",
+        "variables": [
+          "name"
+        ],
+        "version": "draft",
+        "created_at": "2026-03-18T11:06:41.778034",
+        "created_by": "system",
+        "description": "",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-03-18T11:06:41.778043"
+        }
+      }
+    ],
+    "api_test": [
+      {
+        "version_id": "api_test_1770258159_0b583d76",
+        "name": "api_test",
+        "content": "Test {{msg}}",
+        "variables": [
+          "msg"
+        ],
+        "version": "draft",
+        "created_at": "2026-02-05T10:22:39.688760",
+        "created_by": "test",
+        "description": "",
+        "metadata": {},
+        "parent_version_id": null,
+        "metrics": {
+          "usage_count": 0,
+          "success_rate": 0.0,
+          "avg_response_time": 0.0,
+          "user_satisfaction": 0.0,
+          "error_rate": 0.0,
+          "token_efficiency": 0.0,
+          "last_updated": "2026-02-05T10:22:39.688772"
+        }
+      }
+    ]
+  },
+  "ab_tests": {
+    "ab_test_1770720226": {
+      "test_id": "ab_test_1770720226",
+      "name": "Test A/B",
+      "description": "测试A/B测试",
+      "template_a_id": "template_a",
+      "template_b_id": "template_b",
+      "traffic_split": 0.6,
+      "start_date": "2026-02-10T18:43:46.130943",
+      "end_date": "2026-02-17T18:43:46.130950",
+      "status": "planning",
+      "min_sample_size": 100,
+      "confidence_level": 0.95,
+      "success_metric": "success_rate"
+    },
+    "ab_test_1772440883": {
+      "test_id": "ab_test_1772440883",
+      "name": "Test A/B",
+      "description": "测试A/B测试",
+      "template_a_id": "template_a",
+      "template_b_id": "template_b",
+      "traffic_split": 0.6,
+      "start_date": "2026-03-02T16:41:23.187283",
+      "end_date": "2026-03-09T16:41:23.187288",
+      "status": "planning",
+      "min_sample_size": 100,
+      "confidence_level": 0.95,
+      "success_metric": "success_rate"
+    },
+    "ab_test_1772441041": {
+      "test_id": "ab_test_1772441041",
+      "name": "Test A/B",
+      "description": "测试A/B测试",
+      "template_a_id": "template_a",
+      "template_b_id": "template_b",
+      "traffic_split": 0.6,
+      "start_date": "2026-03-02T16:44:01.374899",
+      "end_date": "2026-03-09T16:44:01.374904",
+      "status": "planning",
+      "min_sample_size": 100,
+      "confidence_level": 0.95,
+      "success_metric": "success_rate"
+    },
+    "ab_test_1773803202": {
+      "test_id": "ab_test_1773803202",
+      "name": "Test A/B",
+      "description": "测试A/B测试",
+      "template_a_id": "template_a",
+      "template_b_id": "template_b",
+      "traffic_split": 0.6,
+      "start_date": "2026-03-18T11:06:42.010978",
+      "end_date": "2026-03-25T11:06:42.010984",
+      "status": "planning",
+      "min_sample_size": 100,
+      "confidence_level": 0.95,
+      "success_metric": "success_rate"
+    }
+  }
+}

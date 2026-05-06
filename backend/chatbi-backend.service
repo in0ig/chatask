@@ -1,0 +1,36 @@
+# ChatBI 后端服务 systemd 配置
+# /etc/systemd/system/chatbi-backend.service
+
+[Unit]
+Description=ChatBI Backend Service
+After=network.target mysql.target redis.target
+Requires=mysql.target redis.target
+
+[Service]
+Type=simple
+User=chatbi
+Group=chatbi
+WorkingDirectory=/opt/chatbi/backend
+Environment=PYTHONPATH=/opt/chatbi/backend
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/chatbi/backend/venv/bin/gunicorn src.main:app --bind 0.0.0.0:8000 --workers 4 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 100
+Restart=always
+RestartSec=10
+
+# 日志配置
+StandardOutput=journal
+StandardError=journal
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=65536
+
+# 安全配置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/chatbi /var/www/chatbi/uploads
+
+[Install]
+WantedBy=multi-user.target
